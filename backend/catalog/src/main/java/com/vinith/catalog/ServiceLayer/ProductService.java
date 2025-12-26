@@ -8,6 +8,9 @@ import com.vinith.catalog.EntityLayer.Product;
 import com.vinith.catalog.MapperLayer.ProductMapper;
 import com.vinith.catalog.RepositoryLayer.ProductRepository;
 import jakarta.validation.Valid;
+
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,15 +36,20 @@ public class ProductService {
         return repo.findAll();
     }
 
+    @Cacheable(value = "productById", key = "#id")
     public Product getById(Long id) {
         return repo.findById(id).orElseThrow(() -> new IllegalArgumentException("Product not found: " + id));
     }
-
-    public Product getBySku(String sku) {
+    
+    @Cacheable(
+    	    value = "productBySku",
+    	    key = "T(java.lang.String).valueOf(#sku).trim()"
+    	)    public Product getBySku(String sku) {
         return repo.findBySku(norm(sku)).orElseThrow(() -> new IllegalArgumentException("Product not found for SKU: " + sku));
     }
 
     // ---------- Read (DTO) for controllers ----------
+    @Cacheable(value = "products", key = "'all'")
     public List<ProductResponse> getAllProductsAsDto() {
         return repo.findAll().stream()
                 .map(ProductMapper::toResponse)
@@ -57,6 +65,7 @@ public class ProductService {
     }
 
     // ---------- Create (Entity body) for legacy/internal endpoints ----------
+    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
     @Transactional
     public Product create(Product incoming) {
         // Normalize and force INSERT
@@ -83,7 +92,8 @@ public class ProductService {
             throw new DataIntegrityViolationException("SKU already exists: " + incoming.getSku(), e);
         }
     }
-
+    
+    
     @Transactional
     public List<Product> createAllEntities(List<Product> products) {
         if (products == null || products.isEmpty()) return List.of();
@@ -93,6 +103,7 @@ public class ProductService {
     }
 
     // ---------- Create (DTO) for controllers ----------
+    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
     @Transactional
     public ProductResponse create(@Valid ProductCreateRequest req) {
         Product incoming = ProductMapper.fromCreate(req);
@@ -127,6 +138,7 @@ public class ProductService {
     }
 
     // ---------- NEW: Bulk create (DTO) - skip existing SKUs, insert remaining ----------
+    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
     @Transactional
     public BulkCreateResponse bulkCreateSkipExisting(@Valid List<ProductCreateRequest> requests) {
         if (requests == null || requests.isEmpty()) {
@@ -176,6 +188,7 @@ public class ProductService {
     }
 
     // ---------- Update SKU by ID (optional) ----------
+    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
     @Transactional
     public Product updateSku(Long productId, String newSku) {
         Product existing = getById(productId);
@@ -193,6 +206,7 @@ public class ProductService {
     }
 
     // ---------- PATCH by SKU (DTO) ----------
+    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
     @Transactional
     public ProductResponse patchBySku(String sku, @Valid ProductPatchRequest req) {
         Product p = getBySku(sku); // normalized inside getBySku
@@ -202,11 +216,13 @@ public class ProductService {
     }
 
     // ---------- Delete ----------
+    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
     @Transactional
     public void deleteById(Long id) {
         repo.deleteById(id);
     }
-
+    
+    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
     @Transactional
     public long deleteBySku(String sku) {
         return repo.deleteBySku(norm(sku));

@@ -1,12 +1,16 @@
 package com.vinith.catalog.DtoLayer;
 
+import java.io.Serializable;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Response DTO exposed to clients.
  * Mirrors entity fields and nests RatingResponse.
  */
-public class ProductResponse {
+public class ProductResponse implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private Long id;
     private String image;

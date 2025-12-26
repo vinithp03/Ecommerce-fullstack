@@ -1,5 +1,7 @@
 package com.vinith.catalog.EntityLayer;
 
+import java.io.Serializable;
+
 import jakarta.persistence.*;
 
 @Entity
@@ -14,7 +16,9 @@ import jakarta.persistence.*;
         @Index(name = "idx_section", columnList = "section")
     }
 )
-public class Product {
+public class Product implements Serializable {
+	
+    private static final long serialVersionUID = 1L;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -1,9 +1,12 @@
 package com.vinith.catalog.DtoLayer;
 
+import java.io.Serializable;
+
 /**
  * Response DTO for Rating. Matches your Rating entity fields: id, stars, count.
  */
-public class RatingResponse {
+public class RatingResponse  implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     private Long id;
     private Double stars;
