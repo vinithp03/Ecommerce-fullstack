@@ -43,13 +43,13 @@ public class ProductController {
     }
 
     // --- READ ALL ---
-    @GetMapping(path = "/products", produces = "application/json")
+    @GetMapping(path = "/v1/products", produces = "application/json")
     public List<ProductResponse> getAllProducts() {
         return productService.getAllProductsAsDto();
     }
 
     // --- READ ONE by ID ---
-    @GetMapping(path = "/products/{id}", produces = "application/json")
+    @GetMapping(path = "/v1/products/{id}", produces = "application/json")
     public ResponseEntity<ProductResponse> getProductById(@PathVariable Long id) {
         ProductResponse product = productService.getByIdAsDto(id);
         return ResponseEntity.ok(product);
