@@ -2,7 +2,11 @@ package com.vinith.catalog.DtoLayer;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.*;
+import lombok.Getter;
+import lombok.Setter;
 
+@Getter
+@Setter
 public class ProductPatchRequest {
 
     private String image;
@@ -33,31 +37,4 @@ public class ProductPatchRequest {
     private String deliveryDate;
 
     private String section;
-
-    public String getImage() { return image; }
-    public void setImage(String image) { this.image = image; }
-
-    public String getCompany() { return company; }
-    public void setCompany(String company) { this.company = company; }
-
-    public String getItemName() { return itemName; }
-    public void setItemName(String itemName) { this.itemName = itemName; }
-
-    public Integer getOriginalPrice() { return originalPrice; }
-    public void setOriginalPrice(Integer originalPrice) { this.originalPrice = originalPrice; }
-
-    public Integer getCurrentPrice() { return currentPrice; }
-    public void setCurrentPrice(Integer currentPrice) { this.currentPrice = currentPrice; }
-
-    public Integer getDiscountPercentage() { return discountPercentage; }
-    public void setDiscountPercentage(Integer discountPercentage) { this.discountPercentage = discountPercentage; }
-
-    public Integer getReturnPeriod() { return returnPeriod; }
-    public void setReturnPeriod(Integer returnPeriod) { this.returnPeriod = returnPeriod; }
-
-    public String getDeliveryDate() { return deliveryDate; }
-    public void setDeliveryDate(String deliveryDate) { this.deliveryDate = deliveryDate; }
-
-    public String getSection() { return section; }
-    public void setSection(String section) { this.section = section; }
 }

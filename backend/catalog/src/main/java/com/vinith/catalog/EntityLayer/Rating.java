@@ -6,9 +6,17 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.PositiveOrZero;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "rating")
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
 public class Rating implements Serializable {
 	
     private static final long serialVersionUID = 1L;
@@ -24,23 +32,4 @@ public class Rating implements Serializable {
     @PositiveOrZero
     @Column(name = "count")
     private Integer count;
-
-    // -- Constructors --
-    public Rating() {}
-
-    public Rating(Long id, Double stars, Integer count) {
-        this.id = id;
-        this.stars = stars;
-        this.count = count;
-    }
-
-    // -- Getters and Setters --
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-
-    public Double getStars() { return stars; }
-    public void setStars(Double stars) { this.stars = stars; }
-
-    public Integer getCount() { return count; }
-    public void setCount(Integer count) { this.count = count; }
 }
