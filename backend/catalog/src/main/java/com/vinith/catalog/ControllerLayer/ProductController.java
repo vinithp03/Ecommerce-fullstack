@@ -18,7 +18,7 @@ import java.util.UUID;
 
 @CrossOrigin(origins = "http://localhost:5173")
 @RestController
-@RequestMapping("/gap")
+@RequestMapping("/catalog")
 public class ProductController {
 
     // --- Services injected by Spring ---
@@ -67,7 +67,7 @@ public class ProductController {
     public ResponseEntity<?> createProduct(@Valid @RequestBody ProductCreateRequest request) {
         try {
             ProductResponse resp = productService.create(request);
-            URI location = URI.create(String.format("/gap/products/%d", resp.getId()));
+            URI location = URI.create(String.format("/catalog/products/%d", resp.getId()));
 
             // Publish ITEM_CREATED (SKU as Kafka key)
             String payload = toJson(Map.of(
