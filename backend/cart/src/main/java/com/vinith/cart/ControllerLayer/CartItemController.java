@@ -8,7 +8,7 @@ import java.util.List;
 
 @CrossOrigin("http://localhost:5173")
 @RestController
-@RequestMapping("/gap")
+@RequestMapping("/cart")
 public class CartItemController {
 
     private final CartItemService service;
@@ -17,7 +17,7 @@ public class CartItemController {
         this.service = service;
     }
 
-    // POST: add/increment by product id (frontend hits: POST /gap/cart/items/{id})
+    // POST: add/increment by product id (frontend hits: POST /cart/items/{id})
     @PostMapping("/items/{id}")
     public ResponseEntity<CartItemResponse> addItemByProductId(@PathVariable String id) {
         CartItemResponse saved = service.addByProductId(id); // will call Catalog GET /gap/products/{id}
@@ -30,7 +30,7 @@ public class CartItemController {
         return ResponseEntity.ok(service.getAll());
     }
 
-    // DELETE: remove by numeric id (frontend hits: DELETE /gap/cart/items/{id})
+    // DELETE: remove by numeric id (frontend hits: DELETE /cart/items/{id})
     @DeleteMapping("/items/{id}")
     public ResponseEntity<Void> deleteItemById(@PathVariable Long id) {
         service.deleteById(id);

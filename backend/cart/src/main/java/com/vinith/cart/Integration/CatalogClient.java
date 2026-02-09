@@ -19,7 +19,7 @@ public class CatalogClient {
     }
 
     public ProductResponse getProductById(String id) {
-        // Expects Catalog at: {baseUrl}/gap/products/{id}
-        return restTemplate.getForObject(baseUrl + "/gap/v1/products/{id}", ProductResponse.class, id);
+        // Expects Catalog at: {baseUrl}/catalog/products/{id}
+        return restTemplate.getForObject(baseUrl + "/catalog/v1/products/{id}", ProductResponse.class, id);
     }
 }
