@@ -1,72 +1,171 @@
-# Ecommerce Fullstack
+# 🛒 Ecommerce Fullstack
 
-## High Level Architecture (HLD)
+## 🏗 High Level Architecture (HLD)
 
 ![Ecommerce Full Stack HLD](images/project_HLD.jpg)
 
-## Project Overview
+---
 
-Ecommerce Fullstack is a microservices-based e-commerce application built with React.js for the frontend and Spring Boot for the backend. It currently includes **Catalog Service** and **Cart Service**, providing a seamless shopping experience with real-time updates using Kafka and optimized performance using Redis caching.
+## 🚀 Project Overview
 
-## Tech Stack
+Ecommerce Fullstack is a microservices-based e-commerce application built with **React.js (Frontend)** and **Spring Boot (Backend)**.
+
+The system follows **Event-Driven Architecture (EDA)** using Kafka and implements the **Database-per-Service** pattern.
+
+Currently implemented services:
+
+- **Catalog Service**
+- **Cart Service**
+
+The system ensures real-time cart updates when product details change, without tight service coupling.
+
+---
+
+## 🧠 Architecture Highlights
+
+- Microservices architecture
+- Database per service pattern
+- Event-Driven Architecture using Kafka
+- Eventually consistent data model
+- Redis caching for performance optimization
+- Dockerized infrastructure with Nginx reverse proxy
+
+---
+
+## 🧩 Microservices
+
+### 📦 Catalog Service
+
+- Exposes product APIs
+- Stores product data in MySQL
+- Publishes product update events to Kafka (`catalog.events`)
+- Uses Redis caching for frequently accessed products
+
+### 🛍 Cart Service
+
+- Handles add/remove cart operations
+- Maintains its own MySQL database
+- Consumes Kafka events from Catalog Service
+- Automatically updates cart items when product details change
+- Does not poll Catalog (asynchronous design)
+
+---
+
+## ⚙️ Tech Stack
 
 - **Frontend:** React.js
 - **Backend:** Spring Boot (Java)
 - **Database:** MySQL
 - **Event Streaming:** Apache Kafka
 - **Caching:** Redis
-- **Build & Dependency Management:** Maven
+- **Reverse Proxy:** Nginx
+- **Containerization:** Docker & Docker Compose
+- **Build Tool:** Maven
 
-## Microservices
+---
 
-- **Catalog Service:** Fetches and exposes product details. Publishes product update events via Kafka.
-- **Cart Service:** Handles cart operations. Consumes Kafka events to keep cart data consistent when product details change.
+## 🔄 Event Flow Example
 
-## Key Features
+1. Product price is updated in Catalog Service.
+2. Catalog publishes an `ITEM_UPDATED` event to Kafka.
+3. Cart Service consumes the event.
+4. Cart database updates corresponding product data.
+5. Frontend reflects updated cart information automatically.
 
-- Display products from Catalog Service in the frontend.
-- Add products to cart and store cart data in Cart Service database.
-- Event-driven updates: Product changes automatically reflect in the cart via Kafka.
-- Redis caching for frequently fetched product data to improve performance.
+This removes tight REST dependency between services.
 
-## Future Enhancements
+---
 
-- Integrate API Gateway for routing and service management.
-- Expand microservices to include order management and user authentication.
+## 🐳 Running with Docker (Recommended)
 
-## Setup Instructions
+From the project root:
 
-1. **Backend**
-   - Navigate to each service folder (`catalog` and `cart`).
-   - Configure `application.properties` with MySQL, Redis, and Kafka settings.
-   - Run:
-     ```bash
-     mvn clean install
-     mvn spring-boot:run
-     ```
-2. **Frontend**
-   - Navigate to frontend folder.
-   - Install dependencies:
-     ```bash
-     npm install
-     ```
-   - Start development server:
-     ```bash
-     npm start
-     ```
-3. **Kafka**
-   - Start Kafka broker on default port `9092`.
-   - Ensure topics match `catalog-events`.
-4. **Redis**
-   - Run Redis server on default port `6379`.
+```bash
+docker-compose up --build
+```
 
-## Usage
+### Services
 
-- Browse products via frontend.
-- Add products to cart; cart service stores data in its database.
-- Any update to product details in Catalog Service automatically updates cart items via Kafka events.
-- Frequently accessed products are served from Redis cache for faster response.
+- Catalog → http://localhost:2001
+- Cart → http://localhost:2002
+- Nginx → http://localhost
+- Kafka → 9092
+- Redis → 6379
 
-## Contact
+---
 
-For questions or feedback, reach out to **Vinith**: [vinithpoojary1303@gmail.com](mailto:vinithpoojary1303@gmail.com)
+## 🛠 Setup Instructions (Manual Run)
+
+### 1️⃣ Backend
+
+- Navigate to each service folder (`catalog` and `cart`)
+- Configure `application.properties` for:
+  - MySQL
+  - Kafka
+  - Redis
+
+Run:
+
+```bash
+mvn clean install
+mvn spring-boot:run
+```
+
+---
+
+### 2️⃣ Frontend
+
+Navigate to frontend folder:
+
+```bash
+npm install
+npm start
+```
+
+---
+
+### 3️⃣ Kafka
+
+- Start Kafka broker on default port `9092`
+- Ensure topic name matches:
+  ```
+  catalog.events
+  ```
+
+---
+
+### 4️⃣ Redis
+
+Run Redis server on default port:
+
+```
+6379
+```
+
+---
+
+## ✨ Key Features
+
+- Product listing from Catalog Service
+- Add to cart functionality
+- Event-driven synchronization between services
+- Redis caching for optimized performance
+- Dockerized environment for easy setup
+
+---
+
+## 🔮 Future Enhancements
+
+- API Gateway integration
+- Order Service
+- User Authentication Service
+- Saga pattern for distributed transactions
+- Centralized configuration management
+- CI/CD pipeline
+
+---
+
+## 📬 Contact
+
+**Vinith**  
+📧 vinithpoojary1303@gmail.com
