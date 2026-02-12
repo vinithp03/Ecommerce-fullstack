@@ -8,7 +8,7 @@ import java.util.List;
 
 @CrossOrigin("http://localhost:5173")
 @RestController
-@RequestMapping("/cart")
+@RequestMapping("/cart/v1")
 public class CartItemController {
 
     private final CartItemService service;
@@ -25,7 +25,7 @@ public class CartItemController {
     }
 
     // GET: list all cart items
-    @GetMapping("/v1/items")
+    @GetMapping("/items")
     public ResponseEntity<List<CartItemResponse>> getAllItems() {
         return ResponseEntity.ok(service.getAll());
     }
