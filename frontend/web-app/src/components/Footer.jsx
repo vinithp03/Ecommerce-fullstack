@@ -13,7 +13,7 @@ const Footer = () => {
           <a href="#">Home & Living</a>
           <a href="#">Beauty</a>
           <a href="#">Gift Card</a>
-          <a href="#">Myntra Insider</a>
+          <a href="#">Shopping Insider</a>
         </div>
 
         <div className="footer_column">
@@ -25,7 +25,7 @@ const Footer = () => {
           <a href="#">Home & Living</a>
           <a href="#">Beauty</a>
           <a href="#">Gift Card</a>
-          <a href="#">Myntra Insider</a>
+          <a href="#">Shopping Insider</a>
         </div>
 
         <div className="footer_column">
@@ -37,12 +37,12 @@ const Footer = () => {
           <a href="#">Home & Living</a>
           <a href="#">Beauty</a>
           <a href="#">Gift Card</a>
-          <a href="#">Myntra Insider</a>
+          <a href="#">Shopping Insider</a>
         </div>
       </div>
       <hr />
       <div className="copyright">
-        © 2023 vinith.ecommerceProject.com. All rights reserved.
+        © 2026 vinith.ecommerceProject.com. All rights reserved.
       </div>
     </footer>
   )

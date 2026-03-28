@@ -14,6 +14,7 @@ import WomenSection from "./components/WomenSection.jsx";
 import ElectronicSection from "./components/ElectronicSection.jsx";
 import HomeLivingSection from "./components/HomeLivingSection.jsx";
 import KidSection from "./components/KidSection.jsx";
+import Payment from "./components/Payment.jsx";
 
 const router = createBrowserRouter([
   {
@@ -27,6 +28,7 @@ const router = createBrowserRouter([
       { path: "/electronics", element: <ElectronicSection /> },
       { path: "/home&Living", element: <HomeLivingSection /> },
       { path: "/kids", element: <KidSection /> },
+      { path: "/payment", element: <Payment /> },
     ],
   },
 ]);
