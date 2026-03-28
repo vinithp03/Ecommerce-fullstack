@@ -1,2 +1,4 @@
 /.metadata/
 backend/.idea/ 
+.DS_Store
+.idea/
