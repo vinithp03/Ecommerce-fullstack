@@ -17,23 +17,27 @@ public class CartItemController {
         this.service = service;
     }
 
-    // POST: add/increment by product id (frontend hits: POST /cart/items/{id})
-    @PostMapping("/items/{id}")
-    public ResponseEntity<CartItemResponse> addItemByProductId(@PathVariable String id) {
-        CartItemResponse saved = service.addByProductId(id); // will call Catalog GET /gap/products/{id}
+    // POST /cart/v1/users/{userId}/items/{productId}
+    @PostMapping("/users/{userId}/items/{productId}")
+    public ResponseEntity<CartItemResponse> addItemByProductId(
+            @PathVariable Long userId,
+            @PathVariable String productId) {
+        CartItemResponse saved = service.addByProductId(userId, productId);
         return ResponseEntity.ok(saved);
     }
 
-    // GET: list all cart items
-    @GetMapping("/items")
-    public ResponseEntity<List<CartItemResponse>> getAllItems() {
-        return ResponseEntity.ok(service.getAll());
+    // GET /cart/v1/users/{userId}/items
+    @GetMapping("/users/{userId}/items")
+    public ResponseEntity<List<CartItemResponse>> getAllItems(@PathVariable Long userId) {
+        return ResponseEntity.ok(service.getAll(userId));
     }
 
-    // DELETE: remove by numeric id (frontend hits: DELETE /cart/items/{id})
-    @DeleteMapping("/items/{id}")
-    public ResponseEntity<Void> deleteItemById(@PathVariable Long id) {
-        service.deleteById(id);
+    // DELETE /cart/v1/users/{userId}/items/{id}
+    @DeleteMapping("/users/{userId}/items/{id}")
+    public ResponseEntity<Void> deleteItemById(
+            @PathVariable Long userId,
+            @PathVariable Long id) {
+        service.deleteById(userId, id);
         return ResponseEntity.noContent().build();
     }
 }

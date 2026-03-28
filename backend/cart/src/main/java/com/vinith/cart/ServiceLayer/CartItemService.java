@@ -9,7 +9,6 @@ import com.vinith.cart.EntityLayer.CartItem;
 import com.vinith.cart.Integration.CatalogClient;
 import com.vinith.cart.RepositoryLayer.CartItemRepository;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,25 +23,24 @@ public class CartItemService {
         this.catalogClient = catalogClient;
     }
 
-    // POST /gap/cart/items/{id}
+    // POST /cart/v1/users/{userId}/items/{productId}
     @Transactional
-    public CartItemResponse addByProductId(String idStr) {
+    public CartItemResponse addByProductId(Long userId, String idStr) {
         Long id = parseId(idStr);
 
-        // 1) Fetch product details from Catalog Service
         ProductResponse product = catalogClient.getProductById(idStr);
         if (product == null) {
             throw new IllegalArgumentException("Product not found: " + idStr);
         }
 
-        // 2) Upsert: increment if exists, else create new
-        Optional<CartItem> existingOpt = repo.findById(id);
+        Optional<CartItem> existingOpt = repo.findByUserIdAndId(userId, id);
         CartItem entity = existingOpt.map(e -> {
             e.setQuantity(e.getQuantity() + 1);
             return e;
         }).orElseGet(() -> {
             CartItem e = new CartItem();
             e.setId(id);
+            e.setUserId(userId);
             e.setImage(product.getImage());
             e.setItemName(product.getItemName());
             e.setOriginalPrice(product.getOriginalPrice());
@@ -51,8 +49,6 @@ public class CartItemService {
             e.setReturnPeriod(product.getReturnPeriod());
             e.setDeliveryDate(product.getDeliveryDate());
             e.setSku(product.getSku());
-            // If you want to store company:
-            // e.setCompany(product.getCompany());
             e.setQuantity(1);
             return e;
         });
@@ -61,21 +57,18 @@ public class CartItemService {
         return toResponse(saved);
     }
 
-    // GET /gap/cart/items
+    // GET /cart/v1/users/{userId}/items
     @Transactional(readOnly = true)
-    public List<CartItemResponse> getAll() {
-        List<CartItem> items = repo.findAll();
-        List<CartItemResponse> out = new ArrayList<>();
-        for (CartItem i : items) {
-            out.add(toResponse(i));
-        }
-        return out;
+    public List<CartItemResponse> getAll(Long userId) {
+        return repo.findByUserId(userId).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    // DELETE /gap/cart/items/{id}
+    // DELETE /cart/v1/users/{userId}/items/{id}
     @Transactional
-    public void deleteById(Long id) {
-        repo.deleteById(id);
+    public void deleteById(Long userId, Long id) {
+        repo.deleteByUserIdAndId(userId, id);
     }
 
     private Long parseId(String idStr) {

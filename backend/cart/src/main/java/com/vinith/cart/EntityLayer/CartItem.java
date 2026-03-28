@@ -12,6 +12,9 @@ public class CartItem {
     @Column(name = "id", nullable = false, updatable = false)
     private Long id;
 
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
     @Column(name = "image")
     private String image;
 
@@ -47,6 +50,9 @@ public class CartItem {
     // getters/setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 
     public String getImage() { return image; }
     public void setImage(String image) { this.image = image; }
