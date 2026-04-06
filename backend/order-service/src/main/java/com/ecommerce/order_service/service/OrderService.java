@@ -20,19 +20,19 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final CatalogClient catalogClient;
-    private final OrderEventProducer orderEventProducer;  // add this
+    private final OrderEventProducer orderEventProducer;
 
     public OrderService(OrderRepository orderRepository,
                         CatalogClient catalogClient,
-                        OrderEventProducer orderEventProducer) {  // add this
+                        OrderEventProducer orderEventProducer) {
         this.orderRepository = orderRepository;
         this.catalogClient = catalogClient;
         this.orderEventProducer = orderEventProducer;
     }
 
+    // ✅ CREATE ORDER
     public OrderResponse createOrder(Long userId, CreateOrderRequest request) {
 
-        // Step 1 - Build OrderItems with product snapshot from Catalog
         List<OrderItem> orderItems = request.getItems().stream()
                 .map(itemRequest -> {
                     CatalogProductResponse product = catalogClient.getProductById(itemRequest.getProductId());
@@ -48,24 +48,20 @@ public class OrderService {
                 })
                 .toList();
 
-        // Step 2 - Calculate total price
         Double totalPrice = orderItems.stream()
                 .mapToDouble(item -> item.getPrice() * item.getQuantity())
                 .sum();
 
-        // Step 3 - Build Order entity
         Order order = new Order();
         order.setUserId(userId);
         order.setTotalPrice(totalPrice);
         order.setItems(orderItems);
 
-        // Step 4 - Link each item back to the order
         orderItems.forEach(item -> item.setOrder(order));
 
-        // Step 5 - Save (PrePersist auto sets status + timestamps)
         Order savedOrder = orderRepository.save(order);
 
-        // Step 6 - Publish Kafka event
+        // Kafka event
         OrderEvent event = new OrderEvent(
                 UUID.randomUUID().toString(),
                 "ORDER_CREATED",
@@ -75,11 +71,60 @@ public class OrderService {
         );
         orderEventProducer.publishOrderEvent(event);
 
-        // Step 7 - Map to response DTO and return
         return mapToOrderResponse(savedOrder);
     }
 
+    // ✅ NEW (for Payment Service)
+    public OrderResponse getOrderById(Long orderId) {
+        return orderRepository.findById(orderId)
+                .map(this::mapToOrderResponse) // ✅ FIXED HERE
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+    }
+
+    // ✅ GET ALL ORDERS (USER)
+    public List<OrderResponse> getOrdersByUserId(Long userId) {
+        return orderRepository.findByUserId(userId)
+                .stream()
+                .map(this::mapToOrderResponse)
+                .toList();
+    }
+
+    // ✅ GET SINGLE ORDER (USER)
+    public OrderResponse getOrderByIdAndUserId(Long orderId, Long userId) {
+        Order order = orderRepository.findByIdAndUserId(orderId, userId)
+                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+        return mapToOrderResponse(order);
+    }
+
+    // ✅ CANCEL ORDER
+    public OrderResponse cancelOrder(Long orderId, Long userId) {
+        Order order = orderRepository.findByIdAndUserId(orderId, userId)
+                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+
+        if (order.getStatus() == OrderStatus.PAID) {
+            throw new RuntimeException("Cannot cancel a paid order");
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+        Order saved = orderRepository.save(order);
+
+        OrderEvent event = new OrderEvent(
+                UUID.randomUUID().toString(),
+                "ORDER_CANCELLED",
+                saved.getId(),
+                saved.getUserId(),
+                saved.getUpdatedAt() != null
+                        ? saved.getUpdatedAt().toString()
+                        : LocalDateTime.now().toString()
+        );
+        orderEventProducer.publishOrderEvent(event);
+
+        return mapToOrderResponse(saved);
+    }
+
+    // ✅ COMMON MAPPER (USED EVERYWHERE)
     private OrderResponse mapToOrderResponse(Order order) {
+
         List<OrderItemResponse> itemResponses = order.getItems().stream()
                 .map(item -> OrderItemResponse.builder()
                         .productId(item.getProductId())
@@ -98,43 +143,5 @@ public class OrderService {
                 .createdAt(order.getCreatedAt())
                 .items(itemResponses)
                 .build();
-    }
-    // Get all orders for a user
-    public List<OrderResponse> getOrdersByUserId(Long userId) {
-        return orderRepository.findByUserId(userId)
-                .stream()
-                .map(this::mapToOrderResponse)
-                .toList();
-    }
-
-    // Get single order by ID
-    public OrderResponse getOrderByIdAndUserId(Long orderId, Long userId) {
-        Order order = orderRepository.findByIdAndUserId(orderId, userId)
-                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
-        return mapToOrderResponse(order);
-    }
-
-    // Cancel order
-    public OrderResponse cancelOrder(Long orderId, Long userId) {
-        Order order = orderRepository.findByIdAndUserId(orderId, userId)
-                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
-
-        if (order.getStatus() == OrderStatus.PAID) {
-            throw new RuntimeException("Cannot cancel a paid order");
-        }
-
-        order.setStatus(OrderStatus.CANCELLED);
-        Order saved = orderRepository.save(order);
-
-        OrderEvent event = new OrderEvent(
-                UUID.randomUUID().toString(),
-                "ORDER_CANCELLED",
-                saved.getId(),
-                saved.getUserId(),
-                saved.getUpdatedAt() != null ? saved.getUpdatedAt().toString() : LocalDateTime.now().toString()
-        );
-        orderEventProducer.publishOrderEvent(event);
-
-        return mapToOrderResponse(saved);
     }
 }

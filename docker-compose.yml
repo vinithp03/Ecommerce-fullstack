@@ -32,12 +32,38 @@ services:
     depends_on:
       - catalog-service
       - cart-service
+      - order-service
+      - payment-service
 
   redis:
     image: redis
     container_name: redis
     ports:
       - "6379:6379"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - catalog-service
+      - cart-service
+      - order-service
+      - payment-service
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      - prometheus
 
   mysql:
     image: mysql:8.0
@@ -50,10 +76,12 @@ services:
       MYSQL_DATABASE: catalogdb
       MYSQL_USER: catalog
       MYSQL_PASSWORD: catalog
+      MYSQL_INITDB_SKIP_TZINFO: 1
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+      test: [ "CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -172,6 +200,30 @@ services:
       SPRING_DATASOURCE_PASSWORD: order
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       CATALOG_SERVICE_URL: http://catalog-service:2001
+
+  payment-service:
+    build:
+      context: ./backend/payment-service
+      dockerfile: Dockerfile
+    image: payment-service:1.0
+    container_name: payment-service
+    ports:
+      - "2004:2004"
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      order-service:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ORDER_SERVICE_URL: http://order-service:2003
 
 volumes:
   mysql_data:
