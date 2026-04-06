@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import HomeItem from "../components/HomeItem";
+import WelcomeBanner from "../components/WelcomeBanner";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCartDetails } from "../store/cartSlice";
 
@@ -15,6 +16,7 @@ const Home = () => {
 
   return (
     <main>
+      <WelcomeBanner />
       <div className="items-container">
         {items.map((item) => (
           <HomeItem key={item.id} item={item} />

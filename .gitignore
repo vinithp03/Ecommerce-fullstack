@@ -1,4 +1,18 @@
-/.metadata/
-backend/.idea/ 
-.DS_Store
+# IDE / System
+.metadata/
+backend/.idea/
 .idea/
+.DS_Store
+
+# Node
+node_modules/
+
+# Env files (VERY IMPORTANT)
+.env
+
+# Java / Spring Boot
+target/
+*.log
+
+# OS
+Thumbs.db

@@ -4,6 +4,7 @@ import com.vinith.catalog.DtoLayer.*;
 
 import com.vinith.catalog.Events.CatalogEvent;
 import com.vinith.catalog.KafkaLayer.CatalogEventProducer;
+import com.vinith.catalog.ServiceLayer.GeminiClient;
 import com.vinith.catalog.ServiceLayer.ProductService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
@@ -16,13 +17,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/catalog")
 public class ProductController {
 
     // --- Services injected by Spring ---
     private final ProductService productService;
+
+    private final GeminiClient geminiClient;
 
     // Kafka producer to publish events
     private final CatalogEventProducer eventProducer;
@@ -36,10 +39,11 @@ public class ProductController {
      */
     public ProductController(ProductService productService,
                              CatalogEventProducer eventProducer,
-                             ObjectMapper objectMapper) {
+                             ObjectMapper objectMapper,GeminiClient geminiClient) {
         this.productService = productService;
         this.eventProducer = eventProducer;
         this.objectMapper = objectMapper;
+        this.geminiClient = geminiClient;
     }
 
     // --- READ ALL ---
@@ -235,6 +239,38 @@ public class ProductController {
         public EventPublishResponse(String status, String message) {
             this.status = status;
             this.message = message;
+        }
+    }
+
+    @GetMapping("/welcome")
+    public ResponseEntity<Map<String, String>> getWelcomeMessage() {
+        try {
+            String prompt = """
+            Generate a short friendly welcome message for an eCommerce website.
+            Max 1 sentence. Make it warm and exciting.
+            Vary it each time — deals, new arrivals, or just a greeting.
+            Return only the message text, nothing else.
+            """;
+            String message = geminiClient.generateText(prompt);
+            return ResponseEntity.ok(Map.of("message", message));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("message", "Welcome! Great deals await you today. 🛍️"));
+        }
+    }
+
+    @GetMapping("/offer-banner")
+    public ResponseEntity<Map<String, String>> getOfferBanner() {
+        try {
+            String prompt = """
+            Generate a short promotional banner for an eCommerce site.
+            Style: "Flash Sale — Up to 50% off!" or "Free shipping on orders over ₹499!"
+            Max 8 words. Punchy and varied each time.
+            Return only the banner text, nothing else.
+            """;
+            String banner = geminiClient.generateText(prompt);
+            return ResponseEntity.ok(Map.of("banner", banner));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("banner", "Flash Sale — Up to 50% off today! ⚡"));
         }
     }
 }

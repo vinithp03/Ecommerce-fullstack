@@ -24,12 +24,32 @@ const Payment = () => {
   const [upiId, setUpiId] = useState("");
 
   const handlePay = async () => {
+    console.log("Paying for orderId:", orderId);
     setLoading(true);
-    // Simulate payment processing delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setLoading(false);
-    setSuccess(true);
-    dispatch(fetchCartDetails());
+    try {
+      const res = await fetch(`http://localhost/payment/v1/orders/${orderId}/pay`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": crypto.randomUUID(),
+        },
+        body: JSON.stringify({ paymentMethod: "MOCK" }),
+      });
+
+      if (!res.ok) throw new Error("Payment failed");
+
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        setSuccess(true);
+        dispatch(fetchCartDetails());
+      } else {
+        alert("Payment declined. Please try again.");
+      }
+    } catch (err) {
+      alert("Payment error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (success) {

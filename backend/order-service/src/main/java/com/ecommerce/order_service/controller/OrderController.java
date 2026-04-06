@@ -47,6 +47,12 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getOrderByIdAndUserId(orderId, userId));
     }
 
+    // Get order detail based on orderID (for payment service)
+    @GetMapping("/v1/orders/{orderId}")
+    public ResponseEntity<OrderResponse> getOrderById(@PathVariable Long orderId) {
+        return ResponseEntity.ok(orderService.getOrderById(orderId));
+    }
+
     // Cancel order
     @PatchMapping("/v1/users/{userId}/orders/{orderId}/cancel")
     public ResponseEntity<OrderResponse> cancelOrder(
