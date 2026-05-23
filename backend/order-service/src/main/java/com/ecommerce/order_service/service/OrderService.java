@@ -37,6 +37,14 @@ public class OrderService {
                 .map(itemRequest -> {
                     CatalogProductResponse product = catalogClient.getProductById(itemRequest.getProductId());
 
+                    // fallback sets available=false when catalog is down
+                    // stop order creation immediately with meaningful message
+                    if (!product.isAvailable()) {
+                        throw new RuntimeException(
+                                "Catalog service is currently unavailable. Please try again in a moment."
+                        );
+                    }
+
                     OrderItem item = new OrderItem();
                     item.setProductId(product.getId());
                     item.setProductName(product.getItemName());
