@@ -35,7 +35,7 @@ public class CatalogEventProducer {
     }
 
     /**
-     * Publish to the default topic using event.getItemId() as the Kafka key.
+     * Publish to the default topic using event.getItemId() as the Kafka
      */
     public CompletableFuture<SendResult<String, CatalogEvent>> publishDefault(CatalogEvent event) {
         validateEvent(event);

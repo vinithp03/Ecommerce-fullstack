@@ -36,36 +36,37 @@ public class ProductService {
         return repo.findAll();
     }
 
-    @Cacheable(value = "productById", key = "#id")
     public Product getById(Long id) {
         return repo.findById(id).orElseThrow(() -> new IllegalArgumentException("Product not found: " + id));
     }
     
-    @Cacheable(
-    	    value = "productBySku",
-    	    key = "T(java.lang.String).valueOf(#sku).trim()"
-    	)    public Product getBySku(String sku) {
+    public Product getBySku(String sku) {
         return repo.findBySku(norm(sku)).orElseThrow(() -> new IllegalArgumentException("Product not found for SKU: " + sku));
     }
 
     // ---------- Read (DTO) for controllers ----------
     @Cacheable(value = "products", key = "'all'")
     public List<ProductResponse> getAllProductsAsDto() {
+
+        System.out.println("=========== DB HIT ===========");
+
         return repo.findAll().stream()
                 .map(ProductMapper::toResponse)
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "productById", key = "#id")
     public ProductResponse getByIdAsDto(Long id) {
         return ProductMapper.toResponse(getById(id));
     }
 
+    @Cacheable(value = "productBySku", key = "T(java.lang.String).valueOf(#sku).trim()")
     public ProductResponse getBySkuAsDto(String sku) {
         return ProductMapper.toResponse(getBySku(sku));
     }
 
     // ---------- Create (Entity body) for legacy/internal endpoints ----------
-    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
+    @CacheEvict(value = {"productById", "productBySku", "products"}, allEntries = true)
     @Transactional
     public Product create(Product incoming) {
         // Normalize and force INSERT
@@ -103,7 +104,7 @@ public class ProductService {
     }
 
     // ---------- Create (DTO) for controllers ----------
-    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
+    @CacheEvict(value = {"productById", "productBySku", "products"}, allEntries = true)
     @Transactional
     public ProductResponse create(@Valid ProductCreateRequest req) {
         Product incoming = ProductMapper.fromCreate(req);
@@ -138,7 +139,7 @@ public class ProductService {
     }
 
     // ---------- NEW: Bulk create (DTO) - skip existing SKUs, insert remaining ----------
-    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
+    @CacheEvict(value = {"productById", "productBySku", "products"}, allEntries = true)
     @Transactional
     public BulkCreateResponse bulkCreateSkipExisting(@Valid List<ProductCreateRequest> requests) {
         if (requests == null || requests.isEmpty()) {
@@ -188,7 +189,7 @@ public class ProductService {
     }
 
     // ---------- Update SKU by ID (optional) ----------
-    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
+    @CacheEvict(value = {"productById", "productBySku", "products"}, allEntries = true)
     @Transactional
     public Product updateSku(Long productId, String newSku) {
         Product existing = getById(productId);
@@ -206,7 +207,7 @@ public class ProductService {
     }
 
     // ---------- PATCH by SKU (DTO) ----------
-    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
+    @CacheEvict(value = {"productById", "productBySku", "products"}, allEntries = true)
     @Transactional
     public ProductResponse patchBySku(String sku, @Valid ProductPatchRequest req) {
         Product p = getBySku(sku); // normalized inside getBySku
@@ -216,13 +217,13 @@ public class ProductService {
     }
 
     // ---------- Delete ----------
-    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
+    @CacheEvict(value = {"productById", "productBySku", "products"}, allEntries = true)
     @Transactional
     public void deleteById(Long id) {
         repo.deleteById(id);
     }
     
-    @CacheEvict(value = {"productById", "productBySku"}, allEntries = true)
+    @CacheEvict(value = {"productById", "productBySku", "products"}, allEntries = true)
     @Transactional
     public long deleteBySku(String sku) {
         return repo.deleteBySku(norm(sku));
