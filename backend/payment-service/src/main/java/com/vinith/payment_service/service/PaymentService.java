@@ -1,6 +1,8 @@
 package com.vinith.payment_service.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vinith.payment_service.client.OrderClient;
+import com.vinith.payment_service.client.PaymentGatewayClient;
 import com.vinith.payment_service.dto.OrderResponse;
 import com.vinith.payment_service.dto.PaymentRequest;
 import com.vinith.payment_service.dto.PaymentResponse;
@@ -26,17 +28,19 @@ public class PaymentService {
     private final OrderClient orderClient;
     private final PaymentEventProducer eventProducer;
     private final ObjectMapper objectMapper;
+    private final PaymentGatewayClient paymentGatewayClient;
 
     public PaymentService(PaymentRepository paymentRepository,
                           IdempotencyRepository idempotencyRepository,
                           OrderClient orderClient,
                           PaymentEventProducer eventProducer,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,PaymentGatewayClient paymentGatewayClient) {
         this.paymentRepository = paymentRepository;
         this.idempotencyRepository = idempotencyRepository;
         this.orderClient = orderClient;
         this.eventProducer = eventProducer;
         this.objectMapper = objectMapper;
+        this.paymentGatewayClient = paymentGatewayClient;
     }
 
     @Transactional
@@ -59,19 +63,28 @@ public class PaymentService {
         // --------------------------------------------------
         OrderResponse order = orderClient.getOrder(orderId);
 
+        //CASE 1: order not found
         if (order == null) {
             throw new RuntimeException("Order not found: " + orderId);
         }
 
+        // CASE 2: service failure detected
+        if (order.isServiceDown()) {
+            throw new RuntimeException("Order service unavailable. Try later.");
+        }
+
+        //CASE 3: business validation
         if (!"CREATED".equals(order.getStatus())) {
-            throw new RuntimeException("Order is not in CREATED state. Current state: "
-                    + order.getStatus());
+            throw new RuntimeException("Invalid order state: " + order.getStatus());
         }
 
         // --------------------------------------------------
         // Step 3: Mock payment gateway
         // --------------------------------------------------
-        boolean paymentSuccess = mockGateway();
+        boolean paymentSuccess = paymentGatewayClient.processPayment(
+                orderId,
+                order.getTotalAmount()
+        );
 
         // --------------------------------------------------
         // Step 4: Save payment record
@@ -136,12 +149,6 @@ public class PaymentService {
         return response;
     }
 
-    // --------------------------------------------------
-    // Mock gateway — 90% success rate
-    // --------------------------------------------------
-    private boolean mockGateway() {
-        return Math.random() > 0.1;
-    }
 
     // --------------------------------------------------
     // Helpers

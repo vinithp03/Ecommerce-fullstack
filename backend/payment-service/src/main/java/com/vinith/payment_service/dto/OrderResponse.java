@@ -12,4 +12,5 @@ public class OrderResponse {
     @JsonProperty("totalPrice")
     private BigDecimal totalAmount;
     private String status;
+    private boolean serviceDown;;
 }
