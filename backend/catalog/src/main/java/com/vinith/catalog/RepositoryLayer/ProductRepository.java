@@ -16,7 +16,7 @@ import java.util.Optional;
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
     /**
-     * SKU is the unique business key
+     * SKU is the unique business key Stock Keeping Unit
      */
     boolean existsBySku(String sku);
 
