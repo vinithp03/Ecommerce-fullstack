@@ -1,10 +1,8 @@
 package com.vinith.catalog.ServiceLayer;
 
-import com.vinith.catalog.DtoLayer.BulkCreateResponse;
-import com.vinith.catalog.DtoLayer.ProductCreateRequest;
-import com.vinith.catalog.DtoLayer.ProductPatchRequest;
-import com.vinith.catalog.DtoLayer.ProductResponse;
+import com.vinith.catalog.DtoLayer.*;
 import com.vinith.catalog.EntityLayer.Product;
+import com.vinith.catalog.Exceptions.ProductCreationException;
 import com.vinith.catalog.MapperLayer.ProductMapper;
 import com.vinith.catalog.RepositoryLayer.ProductRepository;
 import jakarta.validation.Valid;
@@ -12,6 +10,9 @@ import jakarta.validation.Valid;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,14 +46,31 @@ public class ProductService {
     }
 
     // ---------- Read (DTO) for controllers ----------
-    @Cacheable(value = "products", key = "'all'")
-    public List<ProductResponse> getAllProductsAsDto() {
+    @Cacheable(value = "products", key = "#cursor + '-' + #size")
+    public CursorPageResponse<ProductResponse> getAllProductsAsDto(Long cursor, int size) {
 
         System.out.println("=========== DB HIT ===========");
 
-        return repo.findAll().stream()
+        if (cursor == null) {
+            cursor = 0L;
+        }
+
+        List<Product> products = repo.findProductsAfter(
+                cursor,
+                PageRequest.of(0, size + 1)
+        );
+
+        boolean hasNext = products.size() > size;
+
+        List<ProductResponse> content = products
+                .subList(0, Math.min(size, products.size()))
+                .stream()
                 .map(ProductMapper::toResponse)
                 .collect(Collectors.toList());
+
+        Long nextCursor = hasNext ? products.get(size - 1).getId() : null;
+
+        return new CursorPageResponse<>(content, nextCursor, hasNext);
     }
 
     @Cacheable(value = "productById", key = "#id")
@@ -81,16 +99,15 @@ public class ProductService {
 
         // SKU checks
         if (incoming.getSku() == null || incoming.getSku().isBlank()) {
-            throw new IllegalArgumentException("SKU must be provided for creation");
-        }
+            throw new ProductCreationException("SKU must be provided for creation");        }
         if (repo.existsBySku(incoming.getSku())) {
-            throw new DataIntegrityViolationException("SKU already exists: " + incoming.getSku());
+            throw new ProductCreationException("SKU already exists: " + incoming.getSku());
         }
 
         try {
             return repo.save(incoming);
         } catch (DataIntegrityViolationException e) {
-            throw new DataIntegrityViolationException("SKU already exists: " + incoming.getSku(), e);
+            throw new ProductCreationException("SKU already exists: " + incoming.getSku());
         }
     }
     

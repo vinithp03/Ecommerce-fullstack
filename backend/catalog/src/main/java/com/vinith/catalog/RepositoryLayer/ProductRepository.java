@@ -2,6 +2,9 @@ package com.vinith.catalog.RepositoryLayer;
 
 import com.vinith.catalog.EntityLayer.Product;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,7 +15,9 @@ import java.util.Optional;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
-    /** SKU is the unique business key */
+    /**
+     * SKU is the unique business key
+     */
     boolean existsBySku(String sku);
 
     Optional<Product> findBySku(String sku);
@@ -28,8 +33,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             AND p.item_name  = :itemName
             AND p.section = :section
             """)
-    Optional<Product> findByCompanyItemNameSection(@Param("company") String company, 
-                                                   @Param("itemName") String itemName, 
+    Optional<Product> findByCompanyItemNameSection(@Param("company") String company,
+                                                   @Param("itemName") String itemName,
                                                    @Param("section") String section);
 
     @Query("""
@@ -39,7 +44,18 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             AND p.item_name  = :itemName
             AND p.section = :section
             """)
-    boolean existsByCompanyItemNameSection(@Param("company") String company, 
-                                           @Param("itemName") String itemName, 
+    boolean existsByCompanyItemNameSection(@Param("company") String company,
+                                           @Param("itemName") String itemName,
                                            @Param("section") String section);
+
+    @Query("""
+    SELECT p
+    FROM Product p
+    WHERE p.id > :cursor
+    ORDER BY p.id ASC
+    """)
+    List<Product> findProductsAfter(
+            @Param("cursor") Long cursor,
+            Pageable pageable
+    );
 }

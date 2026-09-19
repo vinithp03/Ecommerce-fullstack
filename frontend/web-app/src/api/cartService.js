@@ -24,6 +24,7 @@ async function httpJson(url, options = {}) {
 }
 
 export async function fetchCart() {
+   console.log("BASE_URL:", BASE_URL);
   const data = await httpJson(`${BASE_URL}/cart/v1/users/${USER_ID}/items`, {
     method: "GET",
   });

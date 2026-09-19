@@ -7,6 +7,9 @@ const itemSlice = createSlice({
     addInitialItems: (state, action) => {
       return action.payload;
     },
+    addMoreItems: (state, action) => {
+      return [...state, ...action.payload];
+    },
   },
 });
 

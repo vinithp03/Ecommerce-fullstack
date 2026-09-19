@@ -4,6 +4,8 @@ import java.io.Serializable;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 
 @Entity
 @Table(
@@ -54,7 +56,8 @@ public class Product implements Serializable {
     @Column(name = "delivery_date")
     private String delivery_date;
 
-    @OneToOne(cascade = CascadeType.ALL)
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @Fetch(FetchMode.JOIN)
     @JoinColumn(name = "rating_id", referencedColumnName = "id")
     private Rating rating;
 

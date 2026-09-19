@@ -6,7 +6,6 @@ import com.vinith.cart.DtoLayer.CartItemResponse;
 import com.vinith.cart.ServiceLayer.CartItemService;
 import java.util.List;
 
-@CrossOrigin("http://localhost:5173")
 @RestController
 @RequestMapping("/cart/v1")
 public class CartItemController {

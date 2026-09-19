@@ -91,9 +91,8 @@ services:
       context: ./backend/catalog
       dockerfile: Dockerfile
     image: catalog-service:1.0
-    container_name: catalog-service
     ports:
-      - "2001:2001"
+     - "2001:2001"
     restart: always
     depends_on:
       mysql:

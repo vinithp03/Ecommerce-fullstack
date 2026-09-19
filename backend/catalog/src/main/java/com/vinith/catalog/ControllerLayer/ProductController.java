@@ -48,8 +48,12 @@ public class ProductController {
 
     // --- READ ALL ---
     @GetMapping(path = "/v1/products", produces = "application/json")
-    public List<ProductResponse> getAllProducts() {
-        return productService.getAllProductsAsDto();
+    public ResponseEntity<CursorPageResponse<ProductResponse>> getAllProducts(@RequestParam(required=false)Long cursor,
+                                                @RequestParam(defaultValue= "20")int size) {
+
+        CursorPageResponse<ProductResponse> response = productService.getAllProductsAsDto(cursor, size);
+
+        return ResponseEntity.ok(response);
     }
 
     // --- READ ONE by ID ---
@@ -69,7 +73,6 @@ public class ProductController {
     // --- CREATE SINGLE (emits ITEM_CREATED) ---
     @PostMapping(path = "/product", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> createProduct(@Valid @RequestBody ProductCreateRequest request) {
-        try {
             ProductResponse resp = productService.create(request);
             URI location = URI.create(String.format("/catalog/products/%d", resp.getId()));
 
@@ -90,11 +93,7 @@ public class ProductController {
             eventProducer.publishDefault(event); // async
 
             return ResponseEntity.created(location).body(resp); // 201 Created
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body(error("BAD_REQUEST", ex.getMessage())); // 400
-        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
-            return ResponseEntity.status(409).body(error("CONFLICT", ex.getMessage())); // 409 Conflict
-        }
+
     }
 
     // --- BULK CREATE ---
