@@ -5,12 +5,6 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
         stage('Build Catalog') {
             steps {
                 dir('backend/catalog') {
@@ -27,7 +21,10 @@ pipeline {
 
         stage('Deploy Catalog') {
             steps {
-                sh 'docker compose up catalog-service -d'
+                sh '''
+                    cd /Users/vinithpoojary/Desktop/ecommerce-fullstack
+                    docker compose up --no-deps -d catalog-service
+                '''
             }
         }
     }
