@@ -86,12 +86,9 @@ services:
       retries: 10
 
   catalog-service:
-    build:
-      context: ./backend/catalog
-      dockerfile: Dockerfile
-    image: catalog-service:1.0
+    image: 282477853061.dkr.ecr.ap-south-1.amazonaws.com/catalog-service:${CATALOG_TAG}
     ports:
-     - "2001:2001"
+      - "2001:2001"
     restart: always
     depends_on:
       mysql:
