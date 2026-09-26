@@ -9,7 +9,6 @@ permissions:
 
 env:
   AWS_REGION: ap-south-1
-  EC2_INSTANCE_ID: i-0bf1e5559e77fc67
 
 jobs:
   test-ssm:
@@ -20,15 +19,15 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::282477853061:role/github-actions-ecr-role
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ap-south-1
 
       - name: Send SSM command
         id: send-command
         run: |
           COMMAND_ID=$(aws ssm send-command \
-            --region "$AWS_REGION" \
+            --region ap-south-1 \
             --instance-ids i-0bf1e5559e77fc67 \
-            --document-name "AWS-RunShellScript" \
+            --document-name AWS-RunShellScript \
             --parameters 'commands=["hostname"]' \
             --query "Command.CommandId" \
             --output text)
@@ -38,13 +37,13 @@ jobs:
       - name: Wait for command result
         run: |
           aws ssm wait command-executed \
-            --region "$AWS_REGION" \
+            --region ap-south-1 \
             --command-id "$COMMAND_ID" \
-            --instance-id "$EC2_INSTANCE_ID"
+            --instance-id i-0bf1e5559e77fc67
 
       - name: Get command output
         run: |
           aws ssm get-command-invocation \
-            --region "$AWS_REGION" \
+            --region ap-south-1 \
             --command-id "$COMMAND_ID" \
-            --instance-id "$EC2_INSTANCE_ID"
+            --instance-id i-0bf1e5559e77fc67
