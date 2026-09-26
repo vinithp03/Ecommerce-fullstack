@@ -27,7 +27,7 @@ jobs:
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
-            --instance-ids "$EC2_INSTANCE_ID" \
+            --instance-ids i-0bf1e5559e77fc67 \
             --document-name "AWS-RunShellScript" \
             --parameters 'commands=["hostname"]' \
             --query "Command.CommandId" \
