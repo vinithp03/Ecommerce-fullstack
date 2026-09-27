@@ -1,0 +1,91 @@
+name: Cart - Build, Push and Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/cart/**'
+      - '.github/workflows/cart-ecr.yml'
+
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: cart-service
+  ECR_REGISTRY: 282477853061.dkr.ecr.ap-south-1.amazonaws.com
+  EC2_INSTANCE_ID: i-0bf1e55559e77fc67
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build Cart
+        working-directory: backend/cart
+        run: ./mvnw clean package -DskipTests
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::282477853061:role/github-actions-ecr-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Docker Image
+        working-directory: backend/cart
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }} \
+            .
+
+          docker push \
+            $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
+
+      - name: Deploy Cart to EC2
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters 'commands=[
+              "cd /home/ec2-user/Ecommerce-fullstack",
+              "export CART_TAG=${{ github.sha }}",
+              "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 282477853061.dkr.ecr.ap-south-1.amazonaws.com",
+              "docker compose pull cart-service",
+              "docker compose up -d --no-deps cart-service"
+            ]' \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "COMMAND_ID=$COMMAND_ID" >> "$GITHUB_ENV"
+
+      - name: Wait for deployment
+        run: |
+          aws ssm wait command-executed \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"
+
+      - name: Get deployment result
+        run: |
+          aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"

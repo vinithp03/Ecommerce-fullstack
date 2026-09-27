@@ -151,11 +151,7 @@ services:
   # Cart Service (Dockerized)
   # ----------------------------
   cart-service:
-    build:
-      context: ./backend/cart
-      dockerfile: Dockerfile
-    image: cart-service:1.0
-    container_name: cart-service
+    image: 282477853061.dkr.ecr.ap-south-1.amazonaws.com/cart-service:${CART_TAG}
     ports:
       - "2002:2002"
     restart: always
