@@ -27,7 +27,7 @@ public class ProductController {
 
     private final GeminiClient geminiClient;
 
-    // Kafka producer to publish events
+    // Kafka producer to publish eventss
     private final CatalogEventProducer eventProducer;
 
     // ObjectMapper for safe JSON payloads
