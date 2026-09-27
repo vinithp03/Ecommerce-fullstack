@@ -25,7 +25,7 @@ public class PaymentController {
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
 
         try {
-            // Validate idempotency key present
+            // Validate idempotency key presents
             if (idempotencyKey == null || idempotencyKey.isBlank()) {
                 return ResponseEntity.badRequest()
                         .body("Idempotency-Key header is required");

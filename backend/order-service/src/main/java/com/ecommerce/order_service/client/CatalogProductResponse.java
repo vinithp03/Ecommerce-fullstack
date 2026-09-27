@@ -18,6 +18,6 @@ public class CatalogProductResponse {
     @JsonProperty("current_price")
     private Integer currentPrice;
 
-    // true by default (normal response), false when catalog is down
+    // true by default (normal response), false when catalog is DOWN
     private boolean available = true;
 }
