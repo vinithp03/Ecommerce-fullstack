@@ -22,7 +22,7 @@ import java.util.UUID;
 @RequestMapping("/catalog")
 public class ProductController {
 
-    // --- Services injected by Spring ---
+    // --- Services injected by Spring -------
     private final ProductService productService;
 
     private final GeminiClient geminiClient;
