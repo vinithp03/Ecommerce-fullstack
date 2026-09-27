@@ -8,6 +8,8 @@ on:
       - 'backend/catalog/**'
       - '.github/workflows/catalog-ecr.yml'
 
+  workflow_dispatch:
+
 permissions:
   id-token: write
   contents: read
@@ -15,8 +17,8 @@ permissions:
 env:
   AWS_REGION: ap-south-1
   ECR_REPOSITORY: catalog-service
-  EC2_INSTANCE_ID: i-0bf1e55559e77fc67
   ECR_REGISTRY: 282477853061.dkr.ecr.ap-south-1.amazonaws.com
+  EC2_INSTANCE_ID: i-0bf1e55559e77fc67
 
 jobs:
   build-push-deploy:
@@ -58,17 +60,18 @@ jobs:
 
       - name: Deploy Catalog to EC2
         run: |
+          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
+
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name AWS-RunShellScript \
-            --parameters 'commands=[
-              "cd /home/ec2-user/Ecommerce-fullstack",
-              "export CATALOG_TAG=${{ github.sha }}",
-              "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 282477853061.dkr.ecr.ap-south-1.amazonaws.com",
-              "docker compose pull catalog-service",
-              "docker compose up -d --no-deps catalog-service"
-            ]' \
+            --parameters "commands=[
+              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"docker pull $IMAGE\",
+              \"docker rm -f catalog-service 2>/dev/null || true\",
+              \"docker run -d --name catalog-service --restart always --network ecommerce-fullstack_default -p 2001:2001 -e SPRING_PROFILES_ACTIVE=docker -e SPRING_DATASOURCE_URL='jdbc:mysql://mysql:3306/catalogdb?useSSL=false&allowPublicKeyRetrieval=true' -e SPRING_DATASOURCE_USERNAME=catalog -e SPRING_DATASOURCE_PASSWORD=catalog -e SPRING_DATA_REDIS_HOST=redis -e SPRING_DATA_REDIS_PORT=6379 -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 $IMAGE\"
+            ]" \
             --query "Command.CommandId" \
             --output text)
 

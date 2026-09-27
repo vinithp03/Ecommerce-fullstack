@@ -60,17 +60,18 @@ jobs:
 
       - name: Deploy Cart to EC2
         run: |
+          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
+
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name AWS-RunShellScript \
-            --parameters 'commands=[
-              "cd /home/ec2-user/Ecommerce-fullstack",
-              "export CART_TAG=${{ github.sha }}",
-              "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 282477853061.dkr.ecr.ap-south-1.amazonaws.com",
-              "docker compose pull cart-service",
-              "docker compose up -d --no-deps cart-service"
-            ]' \
+            --parameters "commands=[
+              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"docker pull $IMAGE\",
+              \"docker rm -f cart-service 2>/dev/null || true\",
+              \"docker run -d --name cart-service --restart always --network ecommerce-fullstack_default -p 2002:2002 -e SPRING_PROFILES_ACTIVE=docker -e SPRING_DATASOURCE_URL='jdbc:mysql://cart-mysql:3306/cartdb?useSSL=false&allowPublicKeyRetrieval=true' -e SPRING_DATASOURCE_USERNAME=cart -e SPRING_DATASOURCE_PASSWORD=cart -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 $IMAGE\"
+            ]" \
             --query "Command.CommandId" \
             --output text)
 
