@@ -6,6 +6,7 @@ import com.vinith.cart.DtoLayer.CartItemResponse;
 import com.vinith.cart.ServiceLayer.CartItemService;
 import java.util.List;
 
+
 @RestController
 @RequestMapping("/cart/v1")
 public class CartItemController {
@@ -31,7 +32,7 @@ public class CartItemController {
         return ResponseEntity.ok(service.getAll(userId));
     }
 
-    // DELETE /cart/v1/users/{userId}/items/{id}
+    // DELETE /cart/v1/users/{userId}/items/{ID}
     @DeleteMapping("/users/{userId}/items/{id}")
     public ResponseEntity<Void> deleteItemById(
             @PathVariable Long userId,

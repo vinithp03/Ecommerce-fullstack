@@ -35,7 +35,7 @@ public class ProductController {
 
     /**
      * Spring uses this constructor to inject dependencies.
-     * IMPORTANT: Keep a single constructor and include all required beans here.
+     * IMPORTANT: Keep a single constructor and include all required beans Here.
      */
     public ProductController(ProductService productService,
                              CatalogEventProducer eventProducer,
