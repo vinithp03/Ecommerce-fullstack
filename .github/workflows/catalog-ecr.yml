@@ -1,4 +1,4 @@
-name: Catalog - Build and Push to ECR
+name: Catalog - Build, Push and Deploy
 
 on:
   workflow_dispatch:
@@ -10,9 +10,11 @@ permissions:
 env:
   AWS_REGION: ap-south-1
   ECR_REPOSITORY: catalog-service
+  EC2_INSTANCE_ID: i-0bf1e55559e77fc67
+  ECR_REGISTRY: 282477853061.dkr.ecr.ap-south-1.amazonaws.com
 
 jobs:
-  build-and-push:
+  build-push-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -37,14 +39,46 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and Push Docker Image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
         working-directory: backend/catalog
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }} \
+            .
+
+          docker push \
+            $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
+
+      - name: Deploy Catalog to EC2
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters 'commands=[
+              "cd /home/ec2-user/Ecommerce-fullstack",
+              "export CATALOG_TAG=${{ github.sha }}",
+              "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 282477853061.dkr.ecr.ap-south-1.amazonaws.com",
+              "docker compose pull catalog-service",
+              "docker compose up -d --no-deps catalog-service"
+            ]' \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "COMMAND_ID=$COMMAND_ID" >> "$GITHUB_ENV"
+
+      - name: Wait for deployment
+        run: |
+          aws ssm wait command-executed \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"
+
+      - name: Get deployment result
+        run: |
+          aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"
