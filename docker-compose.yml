@@ -171,10 +171,7 @@ services:
   # Order Service (Dockerized)
   # ----------------------------
   order-service:
-    build:
-      context: ./backend/order-service
-      dockerfile: Dockerfile
-    image: order-service:1.0
+    image: 282477853061.dkr.ecr.ap-south-1.amazonaws.com/order-service:${ORDER_TAG}
     container_name: order-service
     ports:
       - "2003:2003"
@@ -193,11 +190,9 @@ services:
       CATALOG_SERVICE_URL: http://catalog-service:2001
 
   payment-service:
-    build:
-      context: ./backend/payment-service
-      dockerfile: Dockerfile
-    image: payment-service:1.0
+    image: 282477853061.dkr.ecr.ap-south-1.amazonaws.com/payment-service:${PAYMENT_TAG}
     container_name: payment-service
+
     ports:
       - "2004:2004"
     restart: always
