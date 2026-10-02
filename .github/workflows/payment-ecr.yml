@@ -61,20 +61,162 @@ jobs:
       - name: Deploy Payment to EC2
         run: |
           IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
-          
+
+          DEPLOY_SCRIPT=$(cat <<EOF
+          set -e
+
+          IMAGE="$IMAGE"
+          ECR_REGISTRY="$ECR_REGISTRY"
+          AWS_REGION="$AWS_REGION"
+
+          echo "Logging in to ECR..."
+
+          aws ecr get-login-password --region "\$AWS_REGION" | \
+            docker login --username AWS --password-stdin "\$ECR_REGISTRY"
+
+          echo "Getting current Payment image..."
+
+          OLD_IMAGE=\$(docker inspect payment-service --format '{{.Config.Image}}')
+
+          echo "Current image: \$OLD_IMAGE"
+          echo "New image: \$IMAGE"
+
+          echo "Pulling new Payment image..."
+
+          docker pull "\$IMAGE"
+
+          echo "Cleaning any leftover candidate..."
+
+          docker rm -f payment-service-new 2>/dev/null || true
+
+          echo "Starting candidate Payment container..."
+
+          if ! docker run -d \
+            --name payment-service-new \
+            --restart no \
+            --network ecommerce-fullstack_default \
+            -p 2104:2004 \
+            -e SPRING_PROFILES_ACTIVE=docker \
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://mysql:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true' \
+            -e SPRING_DATASOURCE_USERNAME=root \
+            -e SPRING_DATASOURCE_PASSWORD=root \
+            -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+            -e ORDER_SERVICE_URL=http://order-service:2003 \
+            "\$IMAGE"; then
+
+            echo "ERROR: Candidate Payment container failed to start."
+            exit 1
+          fi
+
+          echo "Waiting for candidate Payment health..."
+
+          CANDIDATE_HEALTHY=false
+
+          for i in \$(seq 1 30); do
+            if curl -fsS http://localhost:2104/actuator/health | \
+              grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+
+              CANDIDATE_HEALTHY=true
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ "\$CANDIDATE_HEALTHY" != "true" ]; then
+            echo "ERROR: Candidate Payment failed health check."
+
+            docker logs payment-service-new || true
+            docker rm -f payment-service-new || true
+
+            exit 1
+          fi
+
+          echo "Candidate Payment is healthy."
+
+          echo "Stopping old Payment..."
+
+          docker stop payment-service
+
+          echo "Renaming old Payment for rollback..."
+
+          docker rename payment-service payment-service-old
+
+          echo "Removing candidate container..."
+
+          docker rm -f payment-service-new
+
+          echo "Starting final Payment container..."
+
+          FINAL_HEALTHY=false
+
+          if docker run -d \
+            --name payment-service \
+            --restart always \
+            --network ecommerce-fullstack_default \
+            -p 2004:2004 \
+            -e SPRING_PROFILES_ACTIVE=docker \
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://mysql:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true' \
+            -e SPRING_DATASOURCE_USERNAME=root \
+            -e SPRING_DATASOURCE_PASSWORD=root \
+            -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+            -e ORDER_SERVICE_URL=http://order-service:2003 \
+            "\$IMAGE"; then
+
+            echo "Waiting for final Payment health..."
+
+            for i in \$(seq 1 30); do
+              if curl -fsS http://localhost:2004/actuator/health | \
+                grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+
+                FINAL_HEALTHY=true
+                break
+              fi
+
+              sleep 2
+            done
+          fi
+
+          if [ "\$FINAL_HEALTHY" != "true" ]; then
+            echo "ERROR: Final Payment failed health check."
+            echo "Rolling back to previous Payment..."
+
+            docker logs payment-service 2>/dev/null || true
+            docker rm -f payment-service 2>/dev/null || true
+
+            docker rename payment-service-old payment-service
+            docker start payment-service
+
+            exit 1
+          fi
+
+          echo "Final Payment is healthy."
+
+          echo "Removing old Payment container..."
+
+          docker rm payment-service-old
+
+          if [ "\$OLD_IMAGE" != "\$IMAGE" ]; then
+            echo "Removing old Payment image..."
+
+            docker image rm "\$OLD_IMAGE" || true
+          fi
+
+          echo "Payment deployment successful."
+
+          EOF
+          )
+
+          ENCODED_SCRIPT=$(echo "$DEPLOY_SCRIPT" | base64 -w 0)
+
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name AWS-RunShellScript \
-            --parameters "commands=[
-              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"docker pull $IMAGE\",
-              \"docker rm -f payment-service 2>/dev/null || true\",
-              \"docker run -d --name payment-service --restart always --network ecommerce-fullstack_default -p 2004:2004 -e SPRING_PROFILES_ACTIVE=docker -e SPRING_DATASOURCE_URL='jdbc:mysql://mysql:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true' -e SPRING_DATASOURCE_USERNAME=root -e SPRING_DATASOURCE_PASSWORD=root -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 -e ORDER_SERVICE_URL=http://order-service:2003 $IMAGE\"
-            ]" \
+            --parameters "commands=[\"echo $ENCODED_SCRIPT | base64 -d > /tmp/deploy-payment.sh && chmod +x /tmp/deploy-payment.sh && /tmp/deploy-payment.sh\"]" \
             --query "Command.CommandId" \
             --output text)
-          
+
           echo "COMMAND_ID=$COMMAND_ID" >> "$GITHUB_ENV"
 
       - name: Wait for deployment

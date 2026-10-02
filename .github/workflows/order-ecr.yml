@@ -61,20 +61,162 @@ jobs:
       - name: Deploy Order to EC2
         run: |
           IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
-          
+
+          DEPLOY_SCRIPT=$(cat <<EOF
+          set -e
+
+          IMAGE="$IMAGE"
+          ECR_REGISTRY="$ECR_REGISTRY"
+          AWS_REGION="$AWS_REGION"
+
+          echo "Logging in to ECR..."
+
+          aws ecr get-login-password --region "\$AWS_REGION" | \
+            docker login --username AWS --password-stdin "\$ECR_REGISTRY"
+
+          echo "Getting current Order image..."
+
+          OLD_IMAGE=\$(docker inspect order-service --format '{{.Config.Image}}')
+
+          echo "Current image: \$OLD_IMAGE"
+          echo "New image: \$IMAGE"
+
+          echo "Pulling new Order image..."
+
+          docker pull "\$IMAGE"
+
+          echo "Cleaning any leftover candidate..."
+
+          docker rm -f order-service-new 2>/dev/null || true
+
+          echo "Starting candidate Order container..."
+
+          if ! docker run -d \
+            --name order-service-new \
+            --restart no \
+            --network ecommerce-fullstack_default \
+            -p 2103:2003 \
+            -e SPRING_PROFILES_ACTIVE=docker \
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://order-mysql:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true' \
+            -e SPRING_DATASOURCE_USERNAME=order \
+            -e SPRING_DATASOURCE_PASSWORD=order \
+            -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+            -e CATALOG_SERVICE_URL=http://catalog-service:2001 \
+            "\$IMAGE"; then
+
+            echo "ERROR: Candidate Order container failed to start."
+            exit 1
+          fi
+
+          echo "Waiting for candidate Order health..."
+
+          CANDIDATE_HEALTHY=false
+
+          for i in \$(seq 1 30); do
+            if curl -fsS http://localhost:2103/actuator/health | \
+              grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+
+              CANDIDATE_HEALTHY=true
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ "\$CANDIDATE_HEALTHY" != "true" ]; then
+            echo "ERROR: Candidate Order failed health check."
+
+            docker logs order-service-new || true
+            docker rm -f order-service-new || true
+
+            exit 1
+          fi
+
+          echo "Candidate Order is healthy."
+
+          echo "Stopping old Order..."
+
+          docker stop order-service
+
+          echo "Renaming old Order for rollback..."
+
+          docker rename order-service order-service-old
+
+          echo "Removing candidate container..."
+
+          docker rm -f order-service-new
+
+          echo "Starting final Order container..."
+
+          FINAL_HEALTHY=false
+
+          if docker run -d \
+            --name order-service \
+            --restart always \
+            --network ecommerce-fullstack_default \
+            -p 2003:2003 \
+            -e SPRING_PROFILES_ACTIVE=docker \
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://order-mysql:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true' \
+            -e SPRING_DATASOURCE_USERNAME=order \
+            -e SPRING_DATASOURCE_PASSWORD=order \
+            -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+            -e CATALOG_SERVICE_URL=http://catalog-service:2001 \
+            "\$IMAGE"; then
+
+            echo "Waiting for final Order health..."
+
+            for i in \$(seq 1 30); do
+              if curl -fsS http://localhost:2003/actuator/health | \
+                grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+
+                FINAL_HEALTHY=true
+                break
+              fi
+
+              sleep 2
+            done
+          fi
+
+          if [ "\$FINAL_HEALTHY" != "true" ]; then
+            echo "ERROR: Final Order failed health check."
+            echo "Rolling back to previous Order..."
+
+            docker logs order-service 2>/dev/null || true
+            docker rm -f order-service 2>/dev/null || true
+
+            docker rename order-service-old order-service
+            docker start order-service
+
+            exit 1
+          fi
+
+          echo "Final Order is healthy."
+
+          echo "Removing old Order container..."
+
+          docker rm order-service-old
+
+          if [ "\$OLD_IMAGE" != "\$IMAGE" ]; then
+            echo "Removing old Order image..."
+
+            docker image rm "\$OLD_IMAGE" || true
+          fi
+
+          echo "Order deployment successful."
+
+          EOF
+          )
+
+          ENCODED_SCRIPT=$(echo "$DEPLOY_SCRIPT" | base64 -w 0)
+
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name AWS-RunShellScript \
-            --parameters "commands=[
-              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"docker pull $IMAGE\",
-              \"docker rm -f order-service 2>/dev/null || true\",
-              \"docker run -d --name order-service --restart always --network ecommerce-fullstack_default -p 2003:2003 -e SPRING_PROFILES_ACTIVE=docker -e SPRING_DATASOURCE_URL='jdbc:mysql://order-mysql:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true' -e SPRING_DATASOURCE_USERNAME=order -e SPRING_DATASOURCE_PASSWORD=order -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 -e CATALOG_SERVICE_URL=http://catalog-service:2001 $IMAGE\"
-            ]" \
+            --parameters "commands=[\"echo $ENCODED_SCRIPT | base64 -d > /tmp/deploy-order.sh && chmod +x /tmp/deploy-order.sh && /tmp/deploy-order.sh\"]" \
             --query "Command.CommandId" \
             --output text)
-          
+
           echo "COMMAND_ID=$COMMAND_ID" >> "$GITHUB_ENV"
 
       - name: Wait for deployment
