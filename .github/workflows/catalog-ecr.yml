@@ -62,16 +62,205 @@ jobs:
         run: |
           IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
 
+          DEPLOY_SCRIPT=$(cat <<EOF
+          #!/bin/bash
+          set -e
+
+          IMAGE="$IMAGE"
+          ECR_REGISTRY="$ECR_REGISTRY"
+          AWS_REGION="$AWS_REGION"
+
+          echo "========================================"
+          echo "Catalog deployment started"
+          echo "New image: \$IMAGE"
+          echo "========================================"
+
+          # Login to ECR
+          aws ecr get-login-password --region "\$AWS_REGION" | \
+            docker login --username AWS --password-stdin "\$ECR_REGISTRY"
+
+          # Remember the currently running image
+          OLD_IMAGE=\$(docker inspect catalog-service --format '{{.Config.Image}}')
+
+          echo "Old image: \$OLD_IMAGE"
+
+          # Pull the new image
+          docker pull "\$IMAGE"
+
+          # --------------------------------------------------
+          # 1. Start NEW version as candidate
+          # --------------------------------------------------
+
+          echo "Starting candidate container..."
+
+          docker rm -f catalog-service-new 2>/dev/null || true
+
+          if ! docker run -d \
+            --name catalog-service-new \
+            --restart no \
+            --network ecommerce-fullstack_default \
+            -p 2101:2001 \
+            -e SPRING_PROFILES_ACTIVE=docker \
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://mysql:3306/catalogdb?useSSL=false&allowPublicKeyRetrieval=true' \
+            -e SPRING_DATASOURCE_USERNAME=catalog \
+            -e SPRING_DATASOURCE_PASSWORD=catalog \
+            -e SPRING_DATA_REDIS_HOST=redis \
+            -e SPRING_DATA_REDIS_PORT=6379 \
+            -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+            "\$IMAGE"; then
+
+            echo "ERROR: Candidate container failed to start."
+            exit 1
+          fi
+
+          # --------------------------------------------------
+          # 2. Health-check candidate
+          # --------------------------------------------------
+
+          echo "Checking candidate health..."
+
+          CANDIDATE_HEALTHY=false
+
+          for i in \$(seq 1 30); do
+            if curl -fsS http://localhost:2101/actuator/health | \
+              grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+
+              CANDIDATE_HEALTHY=true
+              echo "Candidate is healthy."
+              break
+            fi
+
+            echo "Candidate not ready. Attempt \$i/30..."
+            sleep 2
+          done
+
+          # --------------------------------------------------
+          # 3. Candidate failed → keep OLD version
+          # --------------------------------------------------
+
+          if [ "\$CANDIDATE_HEALTHY" != "true" ]; then
+            echo "ERROR: Candidate failed health check."
+            echo "Keeping old Catalog version running."
+
+            docker logs catalog-service-new || true
+            docker rm -f catalog-service-new || true
+
+            exit 1
+          fi
+
+          # --------------------------------------------------
+          # 4. Candidate healthy → prepare cutover
+          # --------------------------------------------------
+
+          echo "Candidate passed. Preparing cutover..."
+
+          # Stop old version but DO NOT delete it yet.
+          docker stop catalog-service
+
+          # Preserve old container for rollback.
+          docker rename catalog-service catalog-service-old
+
+          # Remove candidate container.
+          # Its image remains available.
+          docker rm -f catalog-service-new
+
+          # --------------------------------------------------
+          # 5. Start NEW version on production port
+          # --------------------------------------------------
+
+          echo "Starting new Catalog version on port 2001..."
+
+          FINAL_HEALTHY=false
+
+          if docker run -d \
+            --name catalog-service \
+            --restart always \
+            --network ecommerce-fullstack_default \
+            -p 2001:2001 \
+            -e SPRING_PROFILES_ACTIVE=docker \
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://mysql:3306/catalogdb?useSSL=false&allowPublicKeyRetrieval=true' \
+            -e SPRING_DATASOURCE_USERNAME=catalog \
+            -e SPRING_DATASOURCE_PASSWORD=catalog \
+            -e SPRING_DATA_REDIS_HOST=redis \
+            -e SPRING_DATA_REDIS_PORT=6379 \
+            -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+            "\$IMAGE"; then
+
+            echo "New Catalog container started."
+
+            # --------------------------------------------------
+            # 6. Final health check
+            # --------------------------------------------------
+
+            echo "Checking final Catalog deployment..."
+
+            for i in \$(seq 1 30); do
+              if curl -fsS http://localhost:2001/actuator/health | \
+                grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+
+                FINAL_HEALTHY=true
+                echo "New Catalog version is healthy."
+                break
+              fi
+
+              echo "New version not ready. Attempt \$i/30..."
+              sleep 2
+            done
+
+          else
+            echo "ERROR: New Catalog container failed to start."
+          fi
+
+          # --------------------------------------------------
+          # 7. Final deployment failed → ROLLBACK
+          # --------------------------------------------------
+
+          if [ "\$FINAL_HEALTHY" != "true" ]; then
+            echo "ERROR: New Catalog deployment failed."
+            echo "Rolling back to old version..."
+
+            docker logs catalog-service 2>/dev/null || true
+            docker rm -f catalog-service 2>/dev/null || true
+
+            docker rename catalog-service-old catalog-service
+
+            docker start catalog-service
+
+            echo "Rollback completed successfully."
+
+            exit 1
+          fi
+
+          # --------------------------------------------------
+          # 8. Deployment successful → remove OLD version
+          # --------------------------------------------------
+
+          echo "Deployment successful."
+
+          docker rm catalog-service-old
+
+          # Remove old Docker image only if it is different
+          # from the new image.
+          if [ "\$OLD_IMAGE" != "\$IMAGE" ]; then
+            docker image rm "\$OLD_IMAGE" || true
+          fi
+
+          echo "Old image removed: \$OLD_IMAGE"
+          echo "New image running: \$IMAGE"
+
+          echo "========================================"
+          echo "Catalog deployment completed successfully"
+          echo "========================================"
+          EOF
+          )
+
+          ENCODED_SCRIPT=$(printf '%s' "$DEPLOY_SCRIPT" | base64 -w 0)
+
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name AWS-RunShellScript \
-            --parameters "commands=[
-              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"docker pull $IMAGE\",
-              \"docker rm -f catalog-service 2>/dev/null || true\",
-              \"docker run -d --name catalog-service --restart always --network ecommerce-fullstack_default -p 2001:2001 -e SPRING_PROFILES_ACTIVE=docker -e SPRING_DATASOURCE_URL='jdbc:mysql://mysql:3306/catalogdb?useSSL=false&allowPublicKeyRetrieval=true' -e SPRING_DATASOURCE_USERNAME=catalog -e SPRING_DATASOURCE_PASSWORD=catalog -e SPRING_DATA_REDIS_HOST=redis -e SPRING_DATA_REDIS_PORT=6379 -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 $IMAGE\"
-            ]" \
+            --parameters "commands=[\"echo $ENCODED_SCRIPT | base64 -d > /tmp/deploy-catalog.sh && chmod +x /tmp/deploy-catalog.sh && /tmp/deploy-catalog.sh\"]" \
             --query "Command.CommandId" \
             --output text)
 

@@ -61,7 +61,7 @@ jobs:
       - name: Deploy Order to EC2
         run: |
           IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
-
+          
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
             --instance-ids "$EC2_INSTANCE_ID" \
@@ -70,11 +70,11 @@ jobs:
               \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
               \"docker pull $IMAGE\",
               \"docker rm -f order-service 2>/dev/null || true\",
-              \"docker run -d --name order-service --restart always --network ecommerce-fullstack_default -p 2003:2003 $IMAGE\"
+              \"docker run -d --name order-service --restart always --network ecommerce-fullstack_default -p 2003:2003 -e SPRING_PROFILES_ACTIVE=docker -e SPRING_DATASOURCE_URL='jdbc:mysql://order-mysql:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true' -e SPRING_DATASOURCE_USERNAME=order -e SPRING_DATASOURCE_PASSWORD=order -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 -e CATALOG_SERVICE_URL=http://catalog-service:2001 $IMAGE\"
             ]" \
             --query "Command.CommandId" \
             --output text)
-
+          
           echo "COMMAND_ID=$COMMAND_ID" >> "$GITHUB_ENV"
 
       - name: Wait for deployment

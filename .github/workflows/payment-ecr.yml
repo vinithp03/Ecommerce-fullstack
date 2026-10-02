@@ -61,7 +61,7 @@ jobs:
       - name: Deploy Payment to EC2
         run: |
           IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
-
+          
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
             --instance-ids "$EC2_INSTANCE_ID" \
@@ -70,11 +70,11 @@ jobs:
               \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
               \"docker pull $IMAGE\",
               \"docker rm -f payment-service 2>/dev/null || true\",
-              \"docker run -d --name payment-service --restart always --network ecommerce-fullstack_default -p 2004:2004 $IMAGE\"
+              \"docker run -d --name payment-service --restart always --network ecommerce-fullstack_default -p 2004:2004 -e SPRING_PROFILES_ACTIVE=docker -e SPRING_DATASOURCE_URL='jdbc:mysql://mysql:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true' -e SPRING_DATASOURCE_USERNAME=root -e SPRING_DATASOURCE_PASSWORD=root -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 -e ORDER_SERVICE_URL=http://order-service:2003 $IMAGE\"
             ]" \
             --query "Command.CommandId" \
             --output text)
-
+          
           echo "COMMAND_ID=$COMMAND_ID" >> "$GITHUB_ENV"
 
       - name: Wait for deployment
