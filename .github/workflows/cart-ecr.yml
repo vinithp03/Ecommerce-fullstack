@@ -93,9 +93,9 @@ jobs:
             --network ecommerce-fullstack_default \
             -p 2102:2002 \
             -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/CARTDB?USESSL=false&allowPublicKeyRetrieval=TRUE' \
-            -e SPRING_datasource_username=cart \
-            -e spring_datasource_password=cart \
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/cartdb?USESSL=false&allowPublicKeyRetrieval=TRUE' \
+            -e SPRING_DATASOURCE_USERNAME=cart
+            -e SPRING_DATASOURCE_PASSWORD=cart  
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
             "\$IMAGE"; then
 
@@ -148,9 +148,9 @@ jobs:
             --network ecommerce-fullstack_default \
             -p 2002:2002 \
             -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/CARTDB?USESSL=false&allowPublicKeyRetrieval=TRUE' \
-            -e SPRING_datasource_username=cart \
-            -e spring_datasource_password=cart \
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/cartdb?USESSL=false&allowPublicKeyRetrieval=TRUE' \
+            -e SPRING_DATASOURCE_USERNAME=cart \
+            -e SPRING_DATASOURCE_PASSWORD=cart  \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
             "\$IMAGE"; then
 
