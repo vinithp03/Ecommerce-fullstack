@@ -97,7 +97,7 @@ jobs:
             --network ecommerce-fullstack_default \
             -p 2103:2003 \
             -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://order-mysql:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true' \
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true' \
             -e SPRING_DATASOURCE_USERNAME=order \
             -e SPRING_DATASOURCE_PASSWORD=order \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
@@ -156,7 +156,7 @@ jobs:
             --network ecommerce-fullstack_default \
             -p 2003:2003 \
             -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://order-mysql:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true' \
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true' \
             -e SPRING_DATASOURCE_USERNAME=order \
             -e SPRING_DATASOURCE_PASSWORD=order \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
