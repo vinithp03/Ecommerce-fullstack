@@ -97,7 +97,7 @@ jobs:
             --network ecommerce-fullstack_default \
             -p 2104:2004 \
             -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true' \           
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true' \
             -e SPRING_DATASOURCE_USERNAME=payment \
             -e SPRING_DATASOURCE_PASSWORD=payment \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
@@ -156,7 +156,7 @@ jobs:
             --network ecommerce-fullstack_default \
             -p 2004:2004 \
             -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true' \         
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true' \
             -e SPRING_DATASOURCE_USERNAME=payment \
             -e SPRING_DATASOURCE_PASSWORD=payment \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
