@@ -1,0 +1,219 @@
+name: Nginx - Build, Push and Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'nginx/**'
+      - '.github/workflows/nginx-ecr.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: nginx
+  ECR_REGISTRY: 282477853061.dkr.ecr.ap-south-1.amazonaws.com
+  EC2_INSTANCE_ID: i-0bf1e55559e77fc67
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::282477853061:role/github-actions-ecr-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Nginx Image
+        working-directory: nginx
+        run: |
+          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
+
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Deploy Nginx to EC2
+        run: |
+          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
+
+          DEPLOY_SCRIPT=$(cat <<EOF
+          set -e
+
+          IMAGE="$IMAGE"
+          ECR_REGISTRY="$ECR_REGISTRY"
+          AWS_REGION="$AWS_REGION"
+
+          echo "Logging in to ECR..."
+
+          aws ecr get-login-password --region "\$AWS_REGION" | \
+            docker login --username AWS --password-stdin "\$ECR_REGISTRY"
+
+          echo "Getting current Nginx image..."
+
+          OLD_IMAGE=\$(docker inspect nginx --format '{{.Config.Image}}')
+
+          echo "Current image: \$OLD_IMAGE"
+          echo "New image: \$IMAGE"
+
+          echo "Pulling new Nginx image..."
+
+          docker pull "\$IMAGE"
+
+          echo "Cleaning leftover candidate..."
+
+          docker rm -f nginx-new 2>/dev/null || true
+
+          echo "Starting candidate Nginx..."
+
+          if ! docker run -d \
+            --name nginx-new \
+            --restart no \
+            --network ecommerce-fullstack_default \
+            -p 8080:80 \
+            "\$IMAGE"; then
+
+            echo "ERROR: Candidate Nginx failed to start."
+            exit 1
+          fi
+
+          echo "Waiting for candidate Nginx..."
+
+          CANDIDATE_HEALTHY=false
+
+          for i in \$(seq 1 30); do
+
+            HTTP_STATUS=\$(curl -s -o /dev/null -w "%{http_code}" \
+              http://localhost:8080/catalog/v1/products?cursor=0\\&size=1 || true)
+
+            if [ "\$HTTP_STATUS" != "000" ]; then
+              CANDIDATE_HEALTHY=true
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ "\$CANDIDATE_HEALTHY" != "true" ]; then
+
+            echo "ERROR: Candidate Nginx failed health check."
+
+            docker logs nginx-new || true
+            docker rm -f nginx-new || true
+
+            exit 1
+          fi
+
+          echo "Candidate Nginx is healthy."
+
+          echo "Stopping old Nginx..."
+
+          docker stop nginx
+
+          echo "Renaming old Nginx for rollback..."
+
+          docker rename nginx nginx-old
+
+          echo "Removing candidate container..."
+
+          docker rm -f nginx-new
+
+          echo "Starting final Nginx..."
+
+          FINAL_HEALTHY=false
+
+          if docker run -d \
+            --name nginx \
+            --restart always \
+            --network ecommerce-fullstack_default \
+            -p 80:80 \
+            "\$IMAGE"; then
+
+            echo "Waiting for final Nginx..."
+
+            for i in \$(seq 1 30); do
+
+              HTTP_STATUS=\$(curl -s -o /dev/null -w "%{http_code}" \
+                http://localhost/catalog/v1/products?cursor=0\\&size=1 || true)
+
+              if [ "\$HTTP_STATUS" != "000" ]; then
+                FINAL_HEALTHY=true
+                break
+              fi
+
+              sleep 2
+            done
+          fi
+
+          if [ "\$FINAL_HEALTHY" != "true" ]; then
+
+            echo "ERROR: Final Nginx failed."
+
+            echo "Rolling back..."
+
+            docker logs nginx 2>/dev/null || true
+
+            docker rm -f nginx 2>/dev/null || true
+
+            docker rename nginx-old nginx
+
+            docker start nginx
+
+            exit 1
+          fi
+
+          echo "Final Nginx is healthy."
+
+          echo "Removing old Nginx container..."
+
+          docker rm nginx-old
+
+          if [ "\$OLD_IMAGE" != "\$IMAGE" ]; then
+
+            echo "Removing old Nginx image..."
+
+            docker image rm "\$OLD_IMAGE" || true
+
+          fi
+
+          echo "Nginx deployment successful."
+
+          EOF
+          )
+
+          ENCODED_SCRIPT=$(echo "$DEPLOY_SCRIPT" | base64 -w 0)
+
+          COMMAND_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "commands=[\"echo $ENCODED_SCRIPT | base64 -d > /tmp/deploy-nginx.sh && chmod +x /tmp/deploy-nginx.sh && /tmp/deploy-nginx.sh\"]" \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "COMMAND_ID=$COMMAND_ID" >> "$GITHUB_ENV"
+
+      - name: Wait for deployment
+        run: |
+          aws ssm wait command-executed \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"
+
+      - name: Get deployment result
+        run: |
+          aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"
