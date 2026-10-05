@@ -1,5 +1,6 @@
 package com.vinith.cart.DtoLayer;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
 
@@ -42,6 +43,7 @@ public class ProductResponse {
 
     // "delivery_date": "2025-10-10"
     @JsonProperty("delivery_date")
+    @JsonFormat(pattern = "dd-MM-yyyy")
     private LocalDate deliveryDate;
 
     // (Optional) rating object if you need it later:
