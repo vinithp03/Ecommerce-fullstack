@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const ORDER_API = "http://localhost:2003";
+const ORDER_API = (import.meta.env.VITE_API_BASE_URL?.trim()) || "";;
 const USER_ID = 1;
 
 const BagSummary = ({ summary, onOrderSuccess }) => {
@@ -49,11 +49,15 @@ const BagSummary = ({ summary, onOrderSuccess }) => {
       }
 
       const data = await res.json();
+
+      const paymentIdempotencyKey = crypto.randomUUID();
+      console.log("order id is", data.orderId);
       navigate("/payment", {
         state: {
           orderId: data.orderId,
           totalAmount: finalPayment,
           items: summary,
+          paymentIdempotencyKey,
         },
       });
       if (onOrderSuccess) onOrderSuccess();

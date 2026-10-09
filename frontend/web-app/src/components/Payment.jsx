@@ -3,12 +3,15 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { fetchCartDetails } from "../store/cartSlice";
 
+const PAYMENT_API = (import.meta.env.VITE_API_BASE_URL?.trim()) || "";;
+
+
 const Payment = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const { orderId, totalAmount, items } = location.state || {};
+  const { orderId, totalAmount, items, paymentIdempotencyKey} = location.state || {};
 
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [loading, setLoading] = useState(false);
@@ -27,11 +30,11 @@ const Payment = () => {
     console.log("Paying for orderId:", orderId);
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost/payment/v1/orders/${orderId}/pay`, {
+      const res = await fetch(`${PAYMENT_API}/payment/v1/orders/${orderId}/pay`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
+          "Idempotency-Key": paymentIdempotencyKey,
         },
         body: JSON.stringify({ paymentMethod: "MOCK" }),
       });
