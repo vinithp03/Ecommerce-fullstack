@@ -1,3 +1,4 @@
+
 package com.vinith.payment_service.repository;
 
 import com.vinith.payment_service.entity.Payment;
@@ -20,11 +21,12 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     @Modifying
     @Query(value = """
-        INSERT INTO payments
-            (order_id, user_id, amount, status, payment_method, created_at, updated_at)
+        INSERT IGNORE INTO payments
+            (order_id, user_id, amount, status,
+             payment_method, created_at, updated_at)
         VALUES
-            (:orderId, :userId, :amount, 'PENDING', :paymentMethod, NOW(), NOW())
-        ON DUPLICATE KEY UPDATE order_id = order_id
+            (:orderId, :userId, :amount, 'PENDING',
+             :paymentMethod, NOW(), NOW())
         """, nativeQuery = true)
     int reservePayment(
             @Param("orderId") Long orderId,

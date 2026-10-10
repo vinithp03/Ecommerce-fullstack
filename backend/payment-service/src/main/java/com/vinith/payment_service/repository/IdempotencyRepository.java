@@ -1,3 +1,4 @@
+
 package com.vinith.payment_service.repository;
 
 import com.vinith.payment_service.entity.IdempotencyRecord;
@@ -17,10 +18,12 @@ public interface IdempotencyRepository
 
     @Modifying
     @Query(value = """
-        INSERT INTO idempotency_records
-        (idempotency_key, order_id, status, created_at)
+        INSERT IGNORE INTO idempotency_records
+            (idempotency_key, order_id, status, created_at)
         VALUES (:key, :orderId, 'PENDING', NOW())
-        ON DUPLICATE KEY UPDATE idempotency_key = idempotency_key
         """, nativeQuery = true)
-    int claimIdempotencyKey(@Param("key") String key, @Param("orderId") Long orderId);
+    int claimIdempotencyKey(
+            @Param("key") String key,
+            @Param("orderId") Long orderId
+    );
 }
