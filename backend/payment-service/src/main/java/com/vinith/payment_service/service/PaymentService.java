@@ -66,6 +66,8 @@ public class PaymentService {
                 orderId
         );
 
+        System.out.println("IDEMPOTENCY CLAIM: key=" + idempotencyKey + ", orderId=" + orderId + ", affectedRows=" + claimed);
+
         if (claimed == 0) {
 
             // Another request already owns this idempotency key
