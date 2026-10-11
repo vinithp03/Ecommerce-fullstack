@@ -22,7 +22,7 @@
   jobs:
     build-push-deploy:
       runs-on: ubuntu-latest
-      
+
       steps:
         - name: Checkout
           uses: actions/checkout@v4
@@ -82,6 +82,8 @@
               --restart no \
               --network ecommerce-fullstack_default \
               -p 8080:80 \
+              -p 8443:443 \
+              -v /opt/ecommerce/letsencrypt/conf:/etc/letsencrypt:ro \
               -v /opt/ecommerce/letsencrypt/www:/var/www/certbot:ro \
               "\$IMAGE"; then
             
@@ -96,7 +98,7 @@
             for i in \$(seq 1 30); do
             
               HTTP_STATUS=\$(curl -s -o /dev/null -w "%{http_code}" \
-                http://localhost:8080/catalog/v1/products?cursor=0\\&size=1 || true)
+                "http://localhost:8080/catalog/v1/products?cursor=0&size=1" || true)
             
               if [ "\$HTTP_STATUS" != "000" ]; then
                 CANDIDATE_HEALTHY=true
@@ -116,7 +118,36 @@
               exit 1
             fi
             
-            echo "Candidate Nginx is healthy."
+            echo "Candidate HTTP is healthy."
+            
+            echo "Checking candidate HTTPS..."
+            
+            HTTPS_HEALTHY=false
+            
+            for i in \$(seq 1 15); do
+            
+              HTTPS_STATUS=\$(curl -k -s -o /dev/null -w "%{http_code}" \
+                "https://localhost:8443/catalog/v1/products?cursor=0&size=1" || true)
+            
+              if [ "\$HTTPS_STATUS" != "000" ]; then
+                HTTPS_HEALTHY=true
+                break
+              fi
+            
+              sleep 2
+            done
+            
+            if [ "\$HTTPS_HEALTHY" != "true" ]; then
+            
+              echo "ERROR: Candidate HTTPS failed."
+            
+              docker logs nginx-new || true
+              docker rm -f nginx-new || true
+            
+              exit 1
+            fi
+            
+            echo "Candidate HTTPS is healthy."
             
             echo "Stopping old Nginx..."
             
@@ -139,6 +170,8 @@
               --restart always \
               --network ecommerce-fullstack_default \
               -p 80:80 \
+              -p 443:443 \
+              -v /opt/ecommerce/letsencrypt/conf:/etc/letsencrypt:ro \
               -v /opt/ecommerce/letsencrypt/www:/var/www/certbot:ro \
               "\$IMAGE"; then
             
@@ -147,7 +180,7 @@
               for i in \$(seq 1 30); do
             
                 HTTP_STATUS=\$(curl -s -o /dev/null -w "%{http_code}" \
-                  http://localhost/catalog/v1/products?cursor=0\\&size=1 || true)
+                  "http://localhost/catalog/v1/products?cursor=0&size=1" || true)
             
                 if [ "\$HTTP_STATUS" != "000" ]; then
                   FINAL_HEALTHY=true
@@ -176,6 +209,23 @@
             fi
             
             echo "Final Nginx is healthy."
+            
+            echo "Checking public HTTPS listener locally..."
+            
+            if ! curl -k -fsS \
+              "https://localhost/catalog/v1/products?cursor=0&size=1" \
+              -o /dev/null; then
+            
+              echo "ERROR: Final HTTPS health check failed."
+            
+              docker rm -f nginx || true
+              docker rename nginx-old nginx
+              docker start nginx
+            
+              exit 1
+            fi
+            
+            echo "Final HTTPS is healthy."
             
             echo "Removing old Nginx container..."
             
