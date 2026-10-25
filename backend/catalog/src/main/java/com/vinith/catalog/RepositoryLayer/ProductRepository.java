@@ -58,4 +58,20 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("cursor") Long cursor,
             Pageable pageable
     );
+
+    /**
+     * Classic page-based query (ORDER BY id ASC for stable ordering).
+     * Returns a Spring {@link Page} so the service can expose totalElements,
+     * totalPages, hasNext/hasPrevious, first/last to the frontend.
+     *
+     * <p>When {@code section} is provided, only products in that section are
+     * returned, so category routes can paginate their own subset.</p>
+     */
+    @Query("""
+    SELECT p
+    FROM Product p
+    WHERE (:section IS NULL OR p.section = :section)
+    ORDER BY p.id ASC
+    """)
+    Page<Product> findAllBySectionOrderByIdAsc(@Param("section") String section, Pageable pageable);
 }

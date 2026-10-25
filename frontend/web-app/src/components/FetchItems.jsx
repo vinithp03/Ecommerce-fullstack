@@ -6,35 +6,60 @@ import { fetchStatusAction } from "../store/FetchingStatusSlice";
 const BASE_URL =
   import.meta.env.VITE_CATALOG_BASE_URL?.trim() || "http://localhost";
 
-const FetchItems = () => {
-  const { currentlyFetching, fetchDone } = useSelector(
+const DEFAULT_PAGE_SIZE = 20;
+
+/**
+ * Headless pagination hook.
+ *
+ * Fetches one page of products at a time from the catalog service and stores
+ * the page content + pagination metadata in the Redux store. Returns the
+ * pagination state plus a `goToPage(page)` helper so the consuming route can
+ * render traditional "Previous / page numbers / Next" buttons.
+ *
+ * @param {string|null} section - optional section filter (e.g. "men")
+ * @param {number} pageSize - items per page
+ * @returns {{ currentPage, totalPages, totalElements, hasNext, hasPrevious, currentlyFetching, goToPage }}
+ */
+export const useFetchItems = (section = null, pageSize = DEFAULT_PAGE_SIZE) => {
+  const { currentlyFetching, currentPage } = useSelector(
     (store) => store.fetchStatus
   );
+  const {
+    items,
+    hasNext,
+    hasPrevious,
+    totalPages,
+    totalElements,
+  } = useSelector((store) => store.items);
 
   const dispatch = useDispatch();
-  const [cursor, setCursor] = useState(null);
-  const [hasNext, setHasNext] = useState(true);
-  const pageSize = 20;
+  // Track the page currently held in the store so we can avoid re-fetching
+  // the same page and re-fetch after a route change.
+  const [storePage, setStorePage] = useState(0);
 
-  const fetchProducts = (cursorValue) => {
-    if (currentlyFetching || !hasNext) return;
+  const fetchPage = (page) => {
+    if (currentlyFetching) return;
 
-    const url = cursorValue
-      ? `${BASE_URL}/catalog/v1/products?cursor=${cursorValue}&size=${pageSize}`
-      : `${BASE_URL}/catalog/v1/products?size=${pageSize}`;
+    const sectionQuery = section ? `&section=${encodeURIComponent(section)}` : "";
+    const url = `${BASE_URL}/catalog/v1/products?page=${page}&size=${pageSize}${sectionQuery}`;
 
-    dispatch(fetchStatusAction.markFetchingStarted());
+    dispatch(fetchStatusAction.markFetchingStarted(page));
 
     fetch(url)
       .then((res) => res.json())
       .then((data) => {
-        if (cursorValue === null) {
-          dispatch(itemAction.addInitialItems(data.content));
-        } else {
-          dispatch(itemAction.addMoreItems(data.content));
-        }
-        setCursor(data.nextCursor);
-        setHasNext(data.hasNext);
+        dispatch(
+          itemAction.getItems({
+            content: data.content,
+            page: data.page,
+            size: data.size,
+            totalPages: data.totalPages,
+            totalElements: data.totalElements,
+            hasNext: data.hasNext,
+            hasPrevious: data.hasPrevious,
+          })
+        );
+        setStorePage(data.page);
         dispatch(fetchStatusAction.markFetchDone());
       })
       .catch((err) => {
@@ -43,26 +68,35 @@ const FetchItems = () => {
       });
   };
 
+  // Load the first page on mount / when the section or page size changes.
   useEffect(() => {
-    fetchProducts(null);
-  }, []);
+    fetchPage(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section, pageSize]);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      if (
-        window.innerHeight + window.scrollY >=
-        document.documentElement.scrollHeight - 500
-      ) {
-        if (hasNext && !currentlyFetching) {
-          fetchProducts(cursor);
-        }
-      }
-    };
+  const goToPage = (page) => {
+    if (page < 0 || page >= totalPages || page === storePage) return;
+    fetchPage(page);
+  };
 
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [cursor, hasNext, currentlyFetching]);
+  return {
+    items,
+    currentPage: storePage,
+    totalPages,
+    totalElements,
+    hasNext,
+    hasPrevious,
+    currentlyFetching,
+    goToPage,
+  };
+};
 
+/**
+ * Backwards-compatible component wrapper. Routes that don't need to render
+ * pagination buttons can keep using <FetchItems />.
+ */
+const FetchItems = () => {
+  useFetchItems();
   return null;
 };
 

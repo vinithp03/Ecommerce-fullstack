@@ -1,15 +1,25 @@
-
-import { useSelector } from 'react-redux'
+import React from 'react'
+import { useFetchItems } from './FetchItems';
 import HomeItem from './HomeItem';
+import Pagination from './Pagination';
 
 const WomenSection = () => {
+  const { items, currentPage, totalPages, hasNext, hasPrevious, goToPage } =
+    useFetchItems("women");
 
-  const items = useSelector(Store => Store.items);
-  const WomenItem = items.filter((item) => item.section === "women");
   return (
-    <div className='items-container'>
-      {WomenItem.map((item) => <HomeItem item={item} />)}
-    </div>
+    <>
+      <div className='items-container'>
+        {items.map((item) => <HomeItem item={item} />)}
+      </div>
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        hasNext={hasNext}
+        hasPrevious={hasPrevious}
+        goToPage={goToPage}
+      />
+    </>
   )
 }
 

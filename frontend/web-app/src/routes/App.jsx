@@ -11,13 +11,11 @@ function App() {
   return (
     <>
       <Header />
-      <FetchItems />
+      <Outlet />
 
       {fetchStatus.currentlyFetching ? (
         <LoadingSpinner />
-      ) : (
-        <Outlet />
-      )}
+      ) : null}
 
       <Footer />
     </>

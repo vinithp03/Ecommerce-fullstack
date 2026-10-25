@@ -46,12 +46,14 @@ public class ProductController {
         this.geminiClient = geminiClient;
     }
 
-    // --- READ ALL ---
+    // --- READ ALL (classic page-based pagination) ---
     @GetMapping(path = "/v1/products", produces = "application/json")
-    public ResponseEntity<CursorPageResponse<ProductResponse>> getAllProducts(@RequestParam(required=false)Long cursor,
-                                                @RequestParam(defaultValue= "20")int size) {
+    public ResponseEntity<PageResponse<ProductResponse>> getAllProducts(
+                                                @RequestParam(defaultValue = "0") int page,
+                                                @RequestParam(defaultValue = "20") int size,
+                                                @RequestParam(required = false) String section) {
 
-        CursorPageResponse<ProductResponse> response = productService.getAllProductsAsDto(cursor, size);
+        PageResponse<ProductResponse> response = productService.getAllProductsAsDto(page, size, section);
 
         return ResponseEntity.ok(response);
     }

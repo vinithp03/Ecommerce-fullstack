@@ -18,7 +18,7 @@ const Header = () => {
   const cartCount = Array.isArray(cartItems) ? cartItems.length : 0;
 
   // Items for search
-  const items = useSelector((store) => store.items);
+  const items = useSelector((store) => store.items.items);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredItems, setFilteredItems] = useState([]);

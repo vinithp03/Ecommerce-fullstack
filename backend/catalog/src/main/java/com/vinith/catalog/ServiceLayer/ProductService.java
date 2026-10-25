@@ -73,6 +73,47 @@ public class ProductService {
         return new CursorPageResponse<>(content, nextCursor, hasNext);
     }
 
+    /**
+     * Classic page-based pagination (0-indexed page number).
+     *
+     * <p>Replaces cursor-based pagination for the products list endpoint so the
+     * frontend can render traditional "Previous / page numbers / Next" buttons.
+     * Returns a {@link PageResponse} carrying content + pagination metadata.</p>
+     */
+    public PageResponse<ProductResponse> getAllProductsAsDto(int page, int size) {
+        return getAllProductsAsDto(page, size, null);
+    }
+
+    /**
+     * Classic page-based pagination (0-indexed page number) with optional
+     * section filter, so category routes can paginate their own subset.
+     */
+    public PageResponse<ProductResponse> getAllProductsAsDto(int page, int size, String section) {
+        if (page < 0) page = 0;
+        if (size <= 0) size = 20;
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = repo.findAllBySectionOrderByIdAsc(section, pageable);
+
+        List<ProductResponse> content = productPage
+                .getContent()
+                .stream()
+                .map(ProductMapper::toResponse)
+                .collect(Collectors.toList());
+
+        return new PageResponse<>(
+                content,
+                productPage.getNumber(),
+                productPage.getSize(),
+                productPage.getTotalPages(),
+                productPage.getTotalElements(),
+                productPage.hasNext(),
+                productPage.hasPrevious(),
+                productPage.isFirst(),
+                productPage.isLast()
+        );
+    }
+
     @Cacheable(value = "productById", key = "#id")
     public ProductResponse getByIdAsDto(Long id) {
         return ProductMapper.toResponse(getById(id));

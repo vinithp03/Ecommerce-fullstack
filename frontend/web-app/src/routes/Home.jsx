@@ -1,18 +1,20 @@
 import React, { useEffect } from "react";
 import HomeItem from "../components/HomeItem";
 import WelcomeBanner from "../components/WelcomeBanner";
-import { useDispatch, useSelector } from "react-redux";
+import { useFetchItems } from "../components/FetchItems";
+import Pagination from "../components/Pagination";
 import { fetchCartDetails } from "../store/cartSlice";
+import { useDispatch } from "react-redux";
 
 const Home = () => {
   const dispatch = useDispatch();
+  const { items, currentPage, totalPages, hasNext, hasPrevious, goToPage } =
+    useFetchItems();
 
   // Load cart from DB on initial render
   useEffect(() => {
     dispatch(fetchCartDetails());
   }, [dispatch]);
-
-  const items = useSelector((store) => store.items);
 
   return (
     <main>
@@ -22,6 +24,15 @@ const Home = () => {
           <HomeItem key={item.id} item={item} />
         ))}
       </div>
+
+          {/* Classic pagination controls */}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        hasNext={hasNext}
+        hasPrevious={hasPrevious}
+        goToPage={goToPage}
+      />
     </main>
   );
 };
