@@ -383,6 +383,28 @@ a {
 
 .profile_action {
   position: relative;
+  cursor: pointer;
+}
+
+.profile_action:hover,
+.profile_action:focus-visible {
+  background-color: var(--surface);
+  border-radius: 8px;
+}
+
+.settings_action {
+  position: relative;
+  cursor: pointer;
+}
+
+.settings_action:hover,
+.settings_action:focus-visible {
+  background-color: var(--surface);
+  border-radius: 8px;
+}
+
+.settings_action svg {
+  font-size: 20px;
 }
 
 .welcome_card_container {

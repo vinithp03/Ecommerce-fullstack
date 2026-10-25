@@ -7,7 +7,6 @@ import { TfiFaceSad } from "react-icons/tfi";
 import { HiMenu, HiX } from "react-icons/hi";
 import { Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import WelcomeCard from "./profile";
 import { themeAction } from "../store/themeSlice";
 
 const IMAGE_BASE_URL =
@@ -42,8 +41,6 @@ const Header = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredItems, setFilteredItems] = useState([]);
-
-  const [isHovered, setIsHovered] = useState(false);
 
   // Mobile menu
   const [menuOpen, setMenuOpen] = useState(false);
@@ -199,36 +196,47 @@ const Header = () => {
           </button>
 
 
-          {/* Profile / Settings */}
+          {/* Profile / Login */}
           <div
             className="action_container profile_action"
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
+            onClick={handleProfileClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleProfileClick();
+              }
+            }}
           >
-
             <IoPerson />
 
             <span className="action_name">
               Profile
             </span>
-
-            {isHovered && (
-              <div className="welcome_card_container">
-                <WelcomeCard />
-              </div>
-            )}
           </div>
 
           {/* Settings */}
           <button
-            className="action_container"
+            className="action_container settings_action"
             onClick={openSettings}
             title="Settings"
           >
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="settings-icon"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
             </svg>
+
+            <span className="action_name">
+              Settings
+            </span>
           </button>
 
           {/* Wishlist */}
