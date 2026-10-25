@@ -381,7 +381,7 @@ const Header = () => {
               style={{
                 width: "100%",
                 padding: "10px",
-                backgroundColor: themeMode === "dark" ? "#2d323a" : "#f5f5f6",
+                backgroundColor: "var(--surface)",
                 border: "1px solid var(--border)",
                 color: "var(--fg)",
                 borderRadius: "6px",
