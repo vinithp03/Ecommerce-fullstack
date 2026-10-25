@@ -59,7 +59,7 @@
 .road {
   width: 100%;
   height: 1.5px;
-  background-color: #282828;
+  background-color: var(--fg);
   position: relative;
   bottom: 0;
   align-self: flex-end;
@@ -71,11 +71,11 @@
   position: absolute;
   width: 20px;
   height: 100%;
-  background-color: #282828;
+  background-color: var(--fg);
   right: -50%;
   border-radius: 3px;
   animation: roadAnimation 1.4s linear infinite;
-  border-left: 10px solid white;
+  border-left: 10px solid var(--card);
 }
 
 .road::after {
@@ -83,11 +83,11 @@
   position: absolute;
   width: 10px;
   height: 100%;
-  background-color: #282828;
+  background-color: var(--fg);
   right: -65%;
   border-radius: 3px;
   animation: roadAnimation 1.4s linear infinite;
-  border-left: 4px solid white;
+  border-left: 4px solid var(--card);
 }
 
 .lampPost {

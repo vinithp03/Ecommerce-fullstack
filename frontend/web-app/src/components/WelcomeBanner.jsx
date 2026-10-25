@@ -20,8 +20,8 @@ function WelcomeBanner() {
     <div>
       {banner && (
         <div style={{
-          background: "#16a34a",
-          color: "white",
+          background: "var(--accent-green)",
+          color: "var(--text-on-primary)",
           textAlign: "center",
           padding: "8px",
           fontSize: "14px",
@@ -38,7 +38,7 @@ function WelcomeBanner() {
           padding: "14px",
           fontSize: "18px",
           fontWeight: "600",
-          color: "#15803d"
+          color: "var(--accent-green)"
         }}>
           {welcome}
         </div>
