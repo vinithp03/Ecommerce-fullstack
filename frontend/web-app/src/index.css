@@ -42,6 +42,8 @@ body[data-theme="dark"] {
   --search-bg: #1e2229;
   --search-text: #f2f3f5;
   --search-placeholder: #9a9fa8;
+  --bs-body-bg: #0f1115;
+  --bs-body-color: #f2f3f5;
 }
 
 * {
