@@ -16,6 +16,10 @@ import HomeLivingSection from "./components/HomeLivingSection.jsx";
 import KidSection from "./components/KidSection.jsx";
 import Payment from "./components/Payment.jsx";
 
+import LoginSignup from "./routes/LoginSignup.jsx";
+import Profile from "./routes/Profile.jsx";
+import AuthProvider from "./components/AuthProvider.jsx";
+
 const router = createBrowserRouter([
   {
     path: "/",
@@ -31,12 +35,16 @@ const router = createBrowserRouter([
       { path: "/payment", element: <Payment /> },
     ],
   },
+  { path: "/login", element: <LoginSignup /> },
+  { path: "/profile", element: <Profile /> },
 ]);
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <Provider store={myntraStore}>
-      <RouterProvider router={router} />
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
     </Provider>
   </StrictMode>
 );
