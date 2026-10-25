@@ -14,7 +14,7 @@ const itemSlice = createSlice({
   reducers: {
     // Replace the whole page with the items + pagination metadata returned
     // by the catalog service for a given page number.
-    setItems: (state, action) => {
+    getItems: (state, action) => {
       const { content, page, size, totalPages, totalElements, hasNext, hasPrevious } = action.payload;
       state.items = content;
       state.currentPage = page;
