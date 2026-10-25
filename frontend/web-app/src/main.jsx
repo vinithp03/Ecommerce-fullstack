@@ -19,6 +19,7 @@ import Payment from "./components/Payment.jsx";
 import LoginSignup from "./routes/LoginSignup.jsx";
 import Profile from "./routes/Profile.jsx";
 import AuthProvider from "./components/AuthProvider.jsx";
+import ThemeProvider from "./components/ThemeProvider.jsx";
 
 const router = createBrowserRouter([
   {
@@ -43,7 +44,9 @@ createRoot(document.getElementById("root")).render(
   <StrictMode>
     <Provider store={myntraStore}>
       <AuthProvider>
-        <RouterProvider router={router} />
+        <ThemeProvider>
+          <RouterProvider router={router} />
+        </ThemeProvider>
       </AuthProvider>
     </Provider>
   </StrictMode>
