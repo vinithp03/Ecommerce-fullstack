@@ -1,3 +1,4 @@
+
 name: Catalog - Build, Push and Deploy
 
 on:
@@ -75,17 +76,64 @@ jobs:
           echo "New image: \$IMAGE"
           echo "========================================"
 
+          # --------------------------------------------------
           # Login to ECR
+          # --------------------------------------------------
+
           aws ecr get-login-password --region "\$AWS_REGION" | \
             docker login --username AWS --password-stdin "\$ECR_REGISTRY"
 
-          # Remember the currently running image
+          # --------------------------------------------------
+          # Remember currently running image
+          # --------------------------------------------------
+
           OLD_IMAGE=\$(docker inspect catalog-service --format '{{.Config.Image}}')
 
           echo "Old image: \$OLD_IMAGE"
 
-          # Pull the new image
+          # --------------------------------------------------
+          # Pull new image
+          # --------------------------------------------------
+
           docker pull "\$IMAGE"
+
+          # --------------------------------------------------
+          # Retrieve production configuration from SSM
+          # --------------------------------------------------
+
+          echo "Retrieving Catalog configuration from SSM..."
+
+          PARAM_PREFIX="/ecommerce/prod/catalog"
+
+          CATALOG_DB_URL=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/CATALOG_DB_URL" \
+            --with-decryption \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          CATALOG_DB_USERNAME=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/CATALOG_DB_USERNAME" \
+            --with-decryption \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          CATALOG_DB_PASSWORD=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/CATALOG_DB_PASSWORD" \
+            --with-decryption \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          GEMINI_API_KEY=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/GEMINI_API_KEY" \
+            --with-decryption \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          echo "Catalog configuration retrieved successfully."
 
           # --------------------------------------------------
           # 1. Start NEW version as candidate
@@ -100,10 +148,11 @@ jobs:
             --restart no \
             --network ecommerce-fullstack_default \
             -p 2101:2001 \
-            -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/catalogdb?useSSL=false&allowPublicKeyRetrieval=true' \
-            -e SPRING_DATASOURCE_USERNAME=catalog \
-            -e SPRING_DATASOURCE_PASSWORD=catalog \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e CATALOG_DB_URL="\$CATALOG_DB_URL" \
+            -e CATALOG_DB_USERNAME="\$CATALOG_DB_USERNAME" \
+            -e CATALOG_DB_PASSWORD="\$CATALOG_DB_PASSWORD" \
+            -e GEMINI_API_KEY="\$GEMINI_API_KEY" \
             -e SPRING_DATA_REDIS_HOST=redis \
             -e SPRING_DATA_REDIS_PORT=6379 \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
@@ -177,10 +226,11 @@ jobs:
             --restart always \
             --network ecommerce-fullstack_default \
             -p 2001:2001 \
-            -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/catalogdb?useSSL=false&allowPublicKeyRetrieval=true' \
-            -e SPRING_DATASOURCE_USERNAME=catalog \
-            -e SPRING_DATASOURCE_PASSWORD=catalog \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e CATALOG_DB_URL="\$CATALOG_DB_URL" \
+            -e CATALOG_DB_USERNAME="\$CATALOG_DB_USERNAME" \
+            -e CATALOG_DB_PASSWORD="\$CATALOG_DB_PASSWORD" \
+            -e GEMINI_API_KEY="\$GEMINI_API_KEY" \
             -e SPRING_DATA_REDIS_HOST=redis \
             -e SPRING_DATA_REDIS_PORT=6379 \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
