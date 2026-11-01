@@ -1,3 +1,4 @@
+
 name: Payment - Build, Push and Deploy
 
 on:
@@ -63,43 +64,85 @@ jobs:
           IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
 
           DEPLOY_SCRIPT=$(cat <<EOF
+          #!/bin/bash
           set -e
 
           IMAGE="$IMAGE"
           ECR_REGISTRY="$ECR_REGISTRY"
           AWS_REGION="$AWS_REGION"
 
-          echo "Logging in to ECR..."
+          echo "========================================"
+          echo "Payment deployment started"
+          echo "New image: \$IMAGE"
+          echo "========================================"
+
+          # --------------------------------------------------
+          # Login to ECR
+          # --------------------------------------------------
 
           aws ecr get-login-password --region "\$AWS_REGION" | \
             docker login --username AWS --password-stdin "\$ECR_REGISTRY"
 
-          echo "Getting current Payment image..."
+          # --------------------------------------------------
+          # Remember currently running image
+          # --------------------------------------------------
 
           OLD_IMAGE=\$(docker inspect payment-service --format '{{.Config.Image}}')
 
-          echo "Current image: \$OLD_IMAGE"
-          echo "New image: \$IMAGE"
+          echo "Old image: \$OLD_IMAGE"
 
-          echo "Pulling new Payment image..."
+          # --------------------------------------------------
+          # Pull new image
+          # --------------------------------------------------
 
           docker pull "\$IMAGE"
 
-          echo "Cleaning any leftover candidate..."
+          # --------------------------------------------------
+          # Retrieve production configuration from SSM
+          # --------------------------------------------------
 
-          docker rm -f payment-service-new 2>/dev/null || true
+          echo "Retrieving Payment configuration from SSM..."
+
+          PARAM_PREFIX="/ecommerce/prod/payment/db"
+
+          PAYMENT_DB_URL=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/url" \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          PAYMENT_DB_USERNAME=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/username" \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          PAYMENT_DB_PASSWORD=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/password" \
+            --with-decryption \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          echo "Payment configuration retrieved successfully."
+
+          # --------------------------------------------------
+          # 1. Start NEW version as candidate
+          # --------------------------------------------------
 
           echo "Starting candidate Payment container..."
+
+          docker rm -f payment-service-new 2>/dev/null || true
 
           if ! docker run -d \
             --name payment-service-new \
             --restart no \
             --network ecommerce-fullstack_default \
             -p 2104:2004 \
-            -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true' \
-            -e SPRING_DATASOURCE_USERNAME=payment \
-            -e SPRING_DATASOURCE_PASSWORD=payment \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e PAYMENT_DB_URL="\$PAYMENT_DB_URL" \
+            -e PAYMENT_DB_USERNAME="\$PAYMENT_DB_USERNAME" \
+            -e PAYMENT_DB_PASSWORD="\$PAYMENT_DB_PASSWORD" \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
             -e ORDER_SERVICE_URL=http://order-service:2003 \
             "\$IMAGE"; then
@@ -108,7 +151,11 @@ jobs:
             exit 1
           fi
 
-          echo "Waiting for candidate Payment health..."
+          # --------------------------------------------------
+          # 2. Health-check candidate
+          # --------------------------------------------------
+
+          echo "Checking candidate Payment health..."
 
           CANDIDATE_HEALTHY=false
 
@@ -117,14 +164,21 @@ jobs:
               grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
 
               CANDIDATE_HEALTHY=true
+              echo "Candidate Payment is healthy."
               break
             fi
 
+            echo "Candidate not ready. Attempt \$i/30..."
             sleep 2
           done
 
+          # --------------------------------------------------
+          # 3. Candidate failed → keep OLD version
+          # --------------------------------------------------
+
           if [ "\$CANDIDATE_HEALTHY" != "true" ]; then
             echo "ERROR: Candidate Payment failed health check."
+            echo "Keeping old Payment version running."
 
             docker logs payment-service-new || true
             docker rm -f payment-service-new || true
@@ -132,21 +186,23 @@ jobs:
             exit 1
           fi
 
-          echo "Candidate Payment is healthy."
+          # --------------------------------------------------
+          # 4. Candidate healthy → prepare cutover
+          # --------------------------------------------------
 
-          echo "Stopping old Payment..."
+          echo "Candidate passed. Preparing cutover..."
 
           docker stop payment-service
 
-          echo "Renaming old Payment for rollback..."
-
           docker rename payment-service payment-service-old
-
-          echo "Removing candidate container..."
 
           docker rm -f payment-service-new
 
-          echo "Starting final Payment container..."
+          # --------------------------------------------------
+          # 5. Start NEW version on production port
+          # --------------------------------------------------
+
+          echo "Starting new Payment version on port 2004..."
 
           FINAL_HEALTHY=false
 
@@ -155,59 +211,82 @@ jobs:
             --restart always \
             --network ecommerce-fullstack_default \
             -p 2004:2004 \
-            -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true' \
-            -e SPRING_DATASOURCE_USERNAME=payment \
-            -e SPRING_DATASOURCE_PASSWORD=payment \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e PAYMENT_DB_URL="\$PAYMENT_DB_URL" \
+            -e PAYMENT_DB_USERNAME="\$PAYMENT_DB_USERNAME" \
+            -e PAYMENT_DB_PASSWORD="\$PAYMENT_DB_PASSWORD" \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
             -e ORDER_SERVICE_URL=http://order-service:2003 \
             "\$IMAGE"; then
 
-            echo "Waiting for final Payment health..."
+            echo "New Payment container started."
+
+            # --------------------------------------------------
+            # 6. Final health check
+            # --------------------------------------------------
+
+            echo "Checking final Payment deployment..."
 
             for i in \$(seq 1 30); do
               if curl -fsS http://localhost:2004/actuator/health | \
                 grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
 
                 FINAL_HEALTHY=true
+                echo "New Payment version is healthy."
                 break
               fi
 
+              echo "New version not ready. Attempt \$i/30..."
               sleep 2
             done
+
+          else
+            echo "ERROR: New Payment container failed to start."
           fi
 
+          # --------------------------------------------------
+          # 7. Final deployment failed → ROLLBACK
+          # --------------------------------------------------
+
           if [ "\$FINAL_HEALTHY" != "true" ]; then
-            echo "ERROR: Final Payment failed health check."
-            echo "Rolling back to previous Payment..."
+            echo "ERROR: New Payment deployment failed."
+            echo "Rolling back to old version..."
 
             docker logs payment-service 2>/dev/null || true
             docker rm -f payment-service 2>/dev/null || true
 
             docker rename payment-service-old payment-service
+
             docker start payment-service
+
+            echo "Rollback completed successfully."
 
             exit 1
           fi
 
-          echo "Final Payment is healthy."
+          # --------------------------------------------------
+          # 8. Deployment successful → remove OLD version
+          # --------------------------------------------------
 
-          echo "Removing old Payment container..."
+          echo "Deployment successful."
 
           docker rm payment-service-old
 
           if [ "\$OLD_IMAGE" != "\$IMAGE" ]; then
-            echo "Removing old Payment image..."
-
             docker image rm "\$OLD_IMAGE" || true
           fi
 
-          echo "Payment deployment successful."
+          echo "Old image removed: \$OLD_IMAGE"
+          echo "New image running: \$IMAGE"
+
+          echo "========================================"
+          echo "Payment deployment completed successfully"
+          echo "========================================"
 
           EOF
           )
 
-          ENCODED_SCRIPT=$(echo "$DEPLOY_SCRIPT" | base64 -w 0)
+          ENCODED_SCRIPT=$(printf '%s' "$DEPLOY_SCRIPT" | base64 -w 0)
 
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \

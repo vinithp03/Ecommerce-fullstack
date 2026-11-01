@@ -1,3 +1,4 @@
+
 name: Order - Build, Push and Deploy
 
 on:
@@ -63,43 +64,85 @@ jobs:
           IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
 
           DEPLOY_SCRIPT=$(cat <<EOF
+          #!/bin/bash
           set -e
 
           IMAGE="$IMAGE"
           ECR_REGISTRY="$ECR_REGISTRY"
           AWS_REGION="$AWS_REGION"
 
-          echo "Logging in to ECR..."
+          echo "========================================"
+          echo "Order deployment started"
+          echo "New image: \$IMAGE"
+          echo "========================================"
+
+          # --------------------------------------------------
+          # Login to ECR
+          # --------------------------------------------------
 
           aws ecr get-login-password --region "\$AWS_REGION" | \
             docker login --username AWS --password-stdin "\$ECR_REGISTRY"
 
-          echo "Getting current Order image..."
+          # --------------------------------------------------
+          # Remember currently running image
+          # --------------------------------------------------
 
           OLD_IMAGE=\$(docker inspect order-service --format '{{.Config.Image}}')
 
-          echo "Current image: \$OLD_IMAGE"
-          echo "New image: \$IMAGE"
+          echo "Old image: \$OLD_IMAGE"
 
-          echo "Pulling new Order image..."
+          # --------------------------------------------------
+          # Pull new image
+          # --------------------------------------------------
 
           docker pull "\$IMAGE"
 
-          echo "Cleaning any leftover candidate..."
+          # --------------------------------------------------
+          # Retrieve production configuration from SSM
+          # --------------------------------------------------
 
-          docker rm -f order-service-new 2>/dev/null || true
+          echo "Retrieving Order configuration from SSM..."
+
+          PARAM_PREFIX="/ecommerce/prod/order/db"
+
+          ORDER_DB_URL=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/url" \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          ORDER_DB_USERNAME=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/username" \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          ORDER_DB_PASSWORD=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/password" \
+            --with-decryption \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          echo "Order configuration retrieved successfully."
+
+          # --------------------------------------------------
+          # 1. Start NEW version as candidate
+          # --------------------------------------------------
 
           echo "Starting candidate Order container..."
+
+          docker rm -f order-service-new 2>/dev/null || true
 
           if ! docker run -d \
             --name order-service-new \
             --restart no \
             --network ecommerce-fullstack_default \
             -p 2103:2003 \
-            -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true' \
-            -e SPRING_DATASOURCE_USERNAME=order \
-            -e SPRING_DATASOURCE_PASSWORD=order \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e ORDER_DB_URL="\$ORDER_DB_URL" \
+            -e ORDER_DB_USERNAME="\$ORDER_DB_USERNAME" \
+            -e ORDER_DB_PASSWORD="\$ORDER_DB_PASSWORD" \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
             -e CATALOG_SERVICE_URL=http://catalog-service:2001 \
             "\$IMAGE"; then
@@ -108,7 +151,11 @@ jobs:
             exit 1
           fi
 
-          echo "Waiting for candidate Order health..."
+          # --------------------------------------------------
+          # 2. Health-check candidate
+          # --------------------------------------------------
+
+          echo "Checking candidate Order health..."
 
           CANDIDATE_HEALTHY=false
 
@@ -117,14 +164,21 @@ jobs:
               grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
 
               CANDIDATE_HEALTHY=true
+              echo "Candidate Order is healthy."
               break
             fi
 
+            echo "Candidate not ready. Attempt \$i/30..."
             sleep 2
           done
 
+          # --------------------------------------------------
+          # 3. Candidate failed → keep OLD version
+          # --------------------------------------------------
+
           if [ "\$CANDIDATE_HEALTHY" != "true" ]; then
             echo "ERROR: Candidate Order failed health check."
+            echo "Keeping old Order version running."
 
             docker logs order-service-new || true
             docker rm -f order-service-new || true
@@ -132,21 +186,23 @@ jobs:
             exit 1
           fi
 
-          echo "Candidate Order is healthy."
+          # --------------------------------------------------
+          # 4. Candidate healthy → prepare cutover
+          # --------------------------------------------------
 
-          echo "Stopping old Order..."
+          echo "Candidate passed. Preparing cutover..."
 
           docker stop order-service
 
-          echo "Renaming old Order for rollback..."
-
           docker rename order-service order-service-old
-
-          echo "Removing candidate container..."
 
           docker rm -f order-service-new
 
-          echo "Starting final Order container..."
+          # --------------------------------------------------
+          # 5. Start NEW version on production port
+          # --------------------------------------------------
+
+          echo "Starting new Order version on port 2003..."
 
           FINAL_HEALTHY=false
 
@@ -155,59 +211,82 @@ jobs:
             --restart always \
             --network ecommerce-fullstack_default \
             -p 2003:2003 \
-            -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true' \
-            -e SPRING_DATASOURCE_USERNAME=order \
-            -e SPRING_DATASOURCE_PASSWORD=order \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e ORDER_DB_URL="\$ORDER_DB_URL" \
+            -e ORDER_DB_USERNAME="\$ORDER_DB_USERNAME" \
+            -e ORDER_DB_PASSWORD="\$ORDER_DB_PASSWORD" \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
             -e CATALOG_SERVICE_URL=http://catalog-service:2001 \
             "\$IMAGE"; then
 
-            echo "Waiting for final Order health..."
+            echo "New Order container started."
+
+            # --------------------------------------------------
+            # 6. Final health check
+            # --------------------------------------------------
+
+            echo "Checking final Order deployment..."
 
             for i in \$(seq 1 30); do
               if curl -fsS http://localhost:2003/actuator/health | \
                 grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
 
                 FINAL_HEALTHY=true
+                echo "New Order version is healthy."
                 break
               fi
 
+              echo "New version not ready. Attempt \$i/30..."
               sleep 2
             done
+
+          else
+            echo "ERROR: New Order container failed to start."
           fi
 
+          # --------------------------------------------------
+          # 7. Final deployment failed → ROLLBACK
+          # --------------------------------------------------
+
           if [ "\$FINAL_HEALTHY" != "true" ]; then
-            echo "ERROR: Final Order failed health check."
-            echo "Rolling back to previous Order..."
+            echo "ERROR: New Order deployment failed."
+            echo "Rolling back to old version..."
 
             docker logs order-service 2>/dev/null || true
             docker rm -f order-service 2>/dev/null || true
 
             docker rename order-service-old order-service
+
             docker start order-service
+
+            echo "Rollback completed successfully."
 
             exit 1
           fi
 
-          echo "Final Order is healthy."
+          # --------------------------------------------------
+          # 8. Deployment successful → remove OLD version
+          # --------------------------------------------------
 
-          echo "Removing old Order container..."
+          echo "Deployment successful."
 
           docker rm order-service-old
 
           if [ "\$OLD_IMAGE" != "\$IMAGE" ]; then
-            echo "Removing old Order image..."
-
             docker image rm "\$OLD_IMAGE" || true
           fi
 
-          echo "Order deployment successful."
+          echo "Old image removed: \$OLD_IMAGE"
+          echo "New image running: \$IMAGE"
+
+          echo "========================================"
+          echo "Order deployment completed successfully"
+          echo "========================================"
 
           EOF
           )
 
-          ENCODED_SCRIPT=$(echo "$DEPLOY_SCRIPT" | base64 -w 0)
+          ENCODED_SCRIPT=$(printf '%s' "$DEPLOY_SCRIPT" | base64 -w 0)
 
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
