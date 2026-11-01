@@ -1,3 +1,4 @@
+
 name: Cart - Build, Push and Deploy
 
 on:
@@ -63,39 +64,87 @@ jobs:
           IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
 
           DEPLOY_SCRIPT=$(cat <<EOF
+          #!/bin/bash
           set -e
 
           IMAGE="$IMAGE"
           ECR_REGISTRY="$ECR_REGISTRY"
           AWS_REGION="$AWS_REGION"
 
-          echo "Logging in to ECR..."
+          echo "========================================"
+          echo "Cart deployment started"
+          echo "New image: \$IMAGE"
+          echo "========================================"
+
+          # --------------------------------------------------
+          # Login to ECR
+          # --------------------------------------------------
+
           aws ecr get-login-password --region "\$AWS_REGION" | \
             docker login --username AWS --password-stdin "\$ECR_REGISTRY"
 
-          echo "Getting current Cart image..."
+          # --------------------------------------------------
+          # Remember currently running image
+          # --------------------------------------------------
+
           OLD_IMAGE=\$(docker inspect cart-service --format '{{.Config.Image}}')
 
-          echo "Current image: \$OLD_IMAGE"
-          echo "New image: \$IMAGE"
+          echo "Old image: \$OLD_IMAGE"
 
-          echo "Pulling new Cart image..."
+          # --------------------------------------------------
+          # Pull new image
+          # --------------------------------------------------
+
           docker pull "\$IMAGE"
 
-          echo "Cleaning any leftover candidate..."
-          docker rm -f cart-service-new 2>/dev/null || true
+          # --------------------------------------------------
+          # Retrieve production configuration from SSM
+          # --------------------------------------------------
+
+          echo "Retrieving Cart configuration from SSM..."
+
+          PARAM_PREFIX="/ecommerce/prod/cart/db"
+
+          CART_DB_URL=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/url" \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          CART_DB_USERNAME=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/username" \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          CART_DB_PASSWORD=\$(aws ssm get-parameter \
+            --name "\$PARAM_PREFIX/password" \
+            --with-decryption \
+            --region "\$AWS_REGION" \
+            --query "Parameter.Value" \
+            --output text)
+
+          echo "Cart configuration retrieved successfully."
+
+          # --------------------------------------------------
+          # 1. Start NEW version as candidate
+          # --------------------------------------------------
 
           echo "Starting candidate Cart container..."
+
+          docker rm -f cart-service-new 2>/dev/null || true
 
           if ! docker run -d \
             --name cart-service-new \
             --restart no \
             --network ecommerce-fullstack_default \
             -p 2102:2002 \
-            -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/cartdb?USESSL=false&allowPublicKeyRetrieval=TRUE' \
-            -e SPRING_DATASOURCE_USERNAME=cart \
-            -e SPRING_DATASOURCE_PASSWORD=cart \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e CART_DB_URL="\$CART_DB_URL" \
+            -e CART_DB_USERNAME="\$CART_DB_USERNAME" \
+            -e CART_DB_PASSWORD="\$CART_DB_PASSWORD" \
+            -e SPRING_DATA_REDIS_HOST=redis \
+            -e SPRING_DATA_REDIS_PORT=6379 \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
             "\$IMAGE"; then
 
@@ -103,7 +152,11 @@ jobs:
             exit 1
           fi
 
-          echo "Waiting for candidate Cart health..."
+          # --------------------------------------------------
+          # 2. Health-check candidate
+          # --------------------------------------------------
+
+          echo "Checking candidate Cart health..."
 
           CANDIDATE_HEALTHY=false
 
@@ -112,14 +165,21 @@ jobs:
               grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
 
               CANDIDATE_HEALTHY=true
+              echo "Candidate Cart is healthy."
               break
             fi
 
+            echo "Candidate not ready. Attempt \$i/30..."
             sleep 2
           done
 
+          # --------------------------------------------------
+          # 3. Candidate failed → keep OLD version
+          # --------------------------------------------------
+
           if [ "\$CANDIDATE_HEALTHY" != "true" ]; then
             echo "ERROR: Candidate Cart failed health check."
+            echo "Keeping old Cart version running."
 
             docker logs cart-service-new || true
             docker rm -f cart-service-new || true
@@ -127,18 +187,23 @@ jobs:
             exit 1
           fi
 
-          echo "Candidate Cart is healthy."
+          # --------------------------------------------------
+          # 4. Candidate healthy → prepare cutover
+          # --------------------------------------------------
 
-          echo "Stopping old Cart..."
+          echo "Candidate passed. Preparing cutover..."
+
           docker stop cart-service
 
-          echo "Renaming old Cart for rollback..."
           docker rename cart-service cart-service-old
 
-          echo "Removing candidate container..."
           docker rm -f cart-service-new
 
-          echo "Starting final Cart container..."
+          # --------------------------------------------------
+          # 5. Start NEW version on production port
+          # --------------------------------------------------
+
+          echo "Starting new Cart version on port 2002..."
 
           FINAL_HEALTHY=false
 
@@ -147,56 +212,83 @@ jobs:
             --restart always \
             --network ecommerce-fullstack_default \
             -p 2002:2002 \
-            -e SPRING_PROFILES_ACTIVE=docker \
-            -e SPRING_DATASOURCE_URL='jdbc:mysql://ecommerce-mysql.cryqc2wcy62d.ap-south-1.rds.amazonaws.com:3306/cartdb?USESSL=false&allowPublicKeyRetrieval=TRUE' \
-            -e SPRING_DATASOURCE_USERNAME=cart \
-            -e SPRING_DATASOURCE_PASSWORD=cart  \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e CART_DB_URL="\$CART_DB_URL" \
+            -e CART_DB_USERNAME="\$CART_DB_USERNAME" \
+            -e CART_DB_PASSWORD="\$CART_DB_PASSWORD" \
+            -e SPRING_DATA_REDIS_HOST=redis \
+            -e SPRING_DATA_REDIS_PORT=6379 \
             -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
             "\$IMAGE"; then
 
-            echo "Waiting for final Cart health..."
+            echo "New Cart container started."
+
+            # --------------------------------------------------
+            # 6. Final health check
+            # --------------------------------------------------
+
+            echo "Checking final Cart deployment..."
 
             for i in \$(seq 1 30); do
               if curl -fsS http://localhost:2002/actuator/health | \
                 grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
 
                 FINAL_HEALTHY=true
+                echo "New Cart version is healthy."
                 break
               fi
 
+              echo "New version not ready. Attempt \$i/30..."
               sleep 2
             done
+
+          else
+            echo "ERROR: New Cart container failed to start."
           fi
 
+          # --------------------------------------------------
+          # 7. Final deployment failed → ROLLBACK
+          # --------------------------------------------------
+
           if [ "\$FINAL_HEALTHY" != "true" ]; then
-            echo "ERROR: Final Cart failed health check."
-            echo "Rolling back to previous Cart..."
+            echo "ERROR: New Cart deployment failed."
+            echo "Rolling back to old version..."
 
             docker logs cart-service 2>/dev/null || true
             docker rm -f cart-service 2>/dev/null || true
 
             docker rename cart-service-old cart-service
+
             docker start cart-service
+
+            echo "Rollback completed successfully."
 
             exit 1
           fi
 
-          echo "Final Cart is healthy."
+          # --------------------------------------------------
+          # 8. Deployment successful → remove OLD version
+          # --------------------------------------------------
 
-          echo "Removing old Cart container..."
+          echo "Deployment successful."
+
           docker rm cart-service-old
 
           if [ "\$OLD_IMAGE" != "\$IMAGE" ]; then
-            echo "Removing old Cart image..."
             docker image rm "\$OLD_IMAGE" || true
           fi
 
-          echo "Cart deployment successful."
+          echo "Old image removed: \$OLD_IMAGE"
+          echo "New image running: \$IMAGE"
+
+          echo "========================================"
+          echo "Cart deployment completed successfully"
+          echo "========================================"
 
           EOF
           )
 
-          ENCODED_SCRIPT=$(echo "$DEPLOY_SCRIPT" | base64 -w 0)
+          ENCODED_SCRIPT=$(printf '%s' "$DEPLOY_SCRIPT" | base64 -w 0)
 
           COMMAND_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \

@@ -1,0 +1,300 @@
+
+services:
+  # -------------------------
+  # INFRASTRUCTURE
+  # -------------------------
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------
+  # MYSQL DATABASES
+  # -------------------------
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    ports:
+      - "3309:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: catalogdb
+      MYSQL_USER: catalog
+      MYSQL_PASSWORD: catalog
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  cart-mysql:
+    image: mysql:8.0
+    container_name: cart-mysql
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: cartdb
+      MYSQL_USER: cart
+      MYSQL_PASSWORD: cart
+    volumes:
+      - cart_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  order-mysql:
+    image: mysql:8.0
+    container_name: order-mysql
+    restart: unless-stopped
+    ports:
+      - "3308:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: order_db
+      MYSQL_USER: order
+      MYSQL_PASSWORD: order
+    volumes:
+      - order_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  payment-mysql:
+    image: mysql:8.0
+    container_name: payment-mysql
+    restart: unless-stopped
+    ports:
+      - "3310:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: paymentdb
+      MYSQL_USER: payment
+      MYSQL_PASSWORD: payment
+    volumes:
+      - payment_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # -------------------------
+  # CATALOG SERVICE
+  # -------------------------
+
+  catalog-service:
+    build:
+      context: ./backend/catalog
+      dockerfile: Dockerfile
+    image: catalog-service:local
+    container_name: catalog-service
+    restart: unless-stopped
+    ports:
+      - "2001:2001"
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/catalogdb?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: catalog
+      SPRING_DATASOURCE_PASSWORD: catalog
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # -------------------------
+  # CART SERVICE
+  # -------------------------
+
+  cart-service:
+    build:
+      context: ./backend/cart
+      dockerfile: Dockerfile
+    image: cart-service:local
+    container_name: cart-service
+    restart: unless-stopped
+    ports:
+      - "2002:2002"
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_DATASOURCE_URL: jdbc:mysql://cart-mysql:3306/cartdb?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: cart
+      SPRING_DATASOURCE_PASSWORD: cart
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      CATALOG_BASE_URL: http://catalog-service:2001
+    depends_on:
+      cart-mysql:
+        condition: service_healthy
+      catalog-service:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # -------------------------
+  # ORDER SERVICE
+  # -------------------------
+
+  order-service:
+    build:
+      context: ./backend/order-service
+      dockerfile: Dockerfile
+    image: order-service:local
+    container_name: order-service
+    restart: unless-stopped
+    ports:
+      - "2003:2003"
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_DATASOURCE_URL: jdbc:mysql://order-mysql:3306/order_db?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: order
+      SPRING_DATASOURCE_PASSWORD: order
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      CATALOG_SERVICE_URL: http://catalog-service:2001
+    depends_on:
+      order-mysql:
+        condition: service_healthy
+      catalog-service:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+
+  # -------------------------
+  # PAYMENT SERVICE
+  # -------------------------
+
+  payment-service:
+    build:
+      context: ./backend/payment-service
+      dockerfile: Dockerfile
+    image: payment-service:local
+    container_name: payment-service
+    restart: unless-stopped
+    ports:
+      - "2004:2004"
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_DATASOURCE_URL: jdbc:mysql://payment-mysql:3306/paymentdb?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: payment
+      SPRING_DATASOURCE_PASSWORD: payment
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ORDER_SERVICE_URL: http://order-service:2003
+    depends_on:
+      payment-mysql:
+        condition: service_healthy
+      order-service:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+
+  # -------------------------
+  # MONITORING
+  # -------------------------
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      - prometheus
+
+
+
+  # -------------------------
+  # reverse proxy and API gateway
+  # -------------------------
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - catalog-service
+      - cart-service
+      - order-service
+      - payment-service
+
+# -------------------------
+# PERSISTENT VOLUMES
+# -------------------------
+
+volumes:
+  mysql_data:
+  cart_mysql_data:
+  order_mysql_data:
+  payment_mysql_data:
