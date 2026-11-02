@@ -5,7 +5,7 @@ import "./index.css";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Bag from "./components/Bag.jsx";
 import Home from "./routes/Home.jsx";
-import LandingPage from "./routes/LandingPage.jsx";
+import LandingPage_new from "./routes/LandingPage_new.jsx";
 import { Provider } from "react-redux";
 import myntraStore from "./store/Index.js";
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -27,7 +27,7 @@ const router = createBrowserRouter([
     path: "/",
     element: <App />,
     children: [
-      { path: "/", element: <LandingPage /> },
+      { path: "/", element: <LandingPage_new /> },
       { path: "/shop", element: <Home /> },
       { path: "/bag", element: <Bag /> },
       { path: "/men", element: <MenSection /> },

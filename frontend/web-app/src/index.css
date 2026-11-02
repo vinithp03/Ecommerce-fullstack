@@ -176,12 +176,28 @@ a {
   padding: 30px 0;
 
   text-decoration: none;
+
+  transition: color 0.3s ease;
+}
+
+.nav_bar a::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  width: 0;
+  height: 2px;
+  background-color: var(--primary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .nav_bar a:hover {
-  background-color: var(--surface);
-  box-shadow: inset 3px 0 0 var(--primary);
-  border-radius: 6px;
+  color: var(--primary);
+}
+
+.nav_bar a:hover::after {
+  width: 100%;
+  left: 0;
 }
 
 .nav_bar a sup {
@@ -2192,12 +2208,30 @@ a {
   font-weight: 600;
   font-size: 16px;
   box-shadow: var(--card-shadow);
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, color 0.3s ease;
+  position: relative;
+}
+
+.landing-cat-card::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  width: 0;
+  height: 2px;
+  background-color: var(--primary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .landing-cat-card:hover {
   box-shadow: inset 6px 6px 12px var(--neu-dark), inset -6px -6px 12px var(--neu-light);
   transform: translateY(-4px);
+  color: var(--primary);
+}
+
+.landing-cat-card:hover::after {
+  width: 60%;
+  left: 20%;
 }
 
 .landing-cat-emoji {

@@ -1,15 +1,14 @@
-import React, { useState } from "react";
+import React from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { addItemToCart, removeItemFromCart } from "../store/cartSlice";
+import { authAction } from "../store/authSlice";
 import { ImBoxAdd } from "react-icons/im";
 import { FcDeleteDatabase } from "react-icons/fc";
-import LoginPopup from "./LoginPopup";
 
 const IMAGE_BASE_URL = "https://pub-2026e42b61ba4a2b8f10a677f80ae76d.r2.dev/";
 
 const HomeItem = ({ item }) => {
   const dispatch = useDispatch();
-  const [showLoginPopup, setShowLoginPopup] = useState(false);
 
   // Auth
   const authUser = useSelector((store) => store.auth.user);
@@ -25,9 +24,10 @@ const HomeItem = ({ item }) => {
     cartItems.some((ci) => ci.id === item.id);
 
   const handleAddToBag = async () => {
-    // Block guests from adding items to the bag
+    // Block guests from adding items to the bag — popup is rendered
+    // once at the app level (LoginPopupProvider) to avoid overlap
     if (!authUser) {
-      setShowLoginPopup(true);
+      dispatch(authAction.setLoginPopup(true));
       return;
     }
     await dispatch(addItemToCart(item.id));
@@ -84,11 +84,6 @@ const HomeItem = ({ item }) => {
           {isLoading ? "Adding..." : "Add to Bag"}
         </button>
       )}
-
-      <LoginPopup
-        open={showLoginPopup}
-        onClose={() => setShowLoginPopup(false)}
-      />
     </div>
   );
 };

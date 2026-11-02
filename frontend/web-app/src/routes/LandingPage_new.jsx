@@ -1,23 +1,39 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 const IMAGE_BASE_URL =
   "https://pub-2026e42b61ba4a2b8f10a677f80ae76d.r2.dev/";
 
+// Infinite carousel: frame 1 → frame 2 → frame 1 ... every 5 seconds
+const SPOTLIGHT_DESKTOP_1 = `${IMAGE_BASE_URL}Hp_spotlight.png`;
+const SPOTLIGHT_DESKTOP_2 = `${IMAGE_BASE_URL}HP_desk_spotlight_frame2.png`;
+const SPOTLIGHT_MOBILE_1 = `${IMAGE_BASE_URL}Hp_MOBspotlight.png`;
+const SPOTLIGHT_MOBILE_2 = `${IMAGE_BASE_URL}HP_mob_spotlight_frame2.png`;
+
+const CAROUSEL_INTERVAL = 5000; // 5 seconds total
+
 const LandingPage = () => {
   const navigate = useNavigate();
+  const [frame, setFrame] = useState(0); // 0 or 1
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setFrame((previous) => (previous === 0 ? 1 : 0));
+    }, CAROUSEL_INTERVAL);
+
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <main className="landing-page">
-      {/* Spotlight */}
       <section className="landing-spotlight" onClick={() => navigate("/shop")}>
         <picture>
           <source
             media="(max-width: 768px)"
-            srcSet="/images/Hp_MOBspotlight.png"
+            srcSet={frame === 0 ? SPOTLIGHT_MOBILE_1 : SPOTLIGHT_MOBILE_2}
           />
           <img
-            src="/images/Hp_spotlight.png"
+            src={frame === 0 ? SPOTLIGHT_DESKTOP_1 : SPOTLIGHT_DESKTOP_2}
             alt="Spotlight"
             className="landing-spotlight-img"
             onError={(e) => {
@@ -27,17 +43,12 @@ const LandingPage = () => {
         </picture>
       </section>
 
-      {/* Hero */}
+      {/* Hero section */}
       <section className="landing-hero">
         <div className="landing-hero-content">
           <p className="landing-eyebrow">✨ New Arrivals</p>
-          <h1 className="landing-title">
-            Great deals await you today.
-          </h1>
-          <p className="landing-subtitle">
-            Discover the latest collections — from fashion to electronics.
-            Limited-time offers with up to 50% off.
-          </p>
+          <h1 className="landing-title">Great deals await you today.</h1>
+          <p className="landing-subtitle">Discover the latest collections — from fashion to electronics. Limited-time offers with up to 50% off.</p>
 
           <div className="landing-cta-row">
             <button

@@ -1,4 +1,3 @@
-// src/store/authSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { login, signup, getMe, logout } from "../api/authService";
 
@@ -19,6 +18,7 @@ const authSlice = createSlice({
     token: null,         // JWT string | null
     status: "idle",      // idle | loading | succeeded | failed
     error: null,
+    showLoginPopup: false,
   },
   reducers: {
     logout: (state) => {
@@ -29,6 +29,9 @@ const authSlice = createSlice({
     },
     clearAuthError: (state) => {
       state.error = null;
+    },
+    setLoginPopup: (state, action) => {
+      state.showLoginPopup = action.payload;
     },
   },
   extraReducers: (b) => {
@@ -42,6 +45,7 @@ const authSlice = createSlice({
         s.user = a.payload.user;
         s.token = a.payload.token;
         s.error = null;
+        s.showLoginPopup = false;
         localStorage.setItem("authToken", a.payload.token);
       })
       .addCase(loginThunk.rejected, (s, a) => {
@@ -59,6 +63,7 @@ const authSlice = createSlice({
         s.user = a.payload.user;
         s.token = a.payload.token;
         s.error = null;
+        s.showLoginPopup = false;
         localStorage.setItem("authToken", a.payload.token);
       })
       .addCase(signupThunk.rejected, (s, a) => {
