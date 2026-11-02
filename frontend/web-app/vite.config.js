@@ -30,7 +30,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+        globPatterns: ["**/*.{js,css,html,ico,svg}"],
+        globIgnores: ["images/Hp_spotlight.png", "images/Hp_MOBspotlight.png"],
+        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
       },
     }),
   ],

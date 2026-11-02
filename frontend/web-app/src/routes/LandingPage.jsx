@@ -9,6 +9,24 @@ const LandingPage = () => {
 
   return (
     <main className="landing-page">
+      {/* Spotlight */}
+      <section className="landing-spotlight" onClick={() => navigate("/shop")}>
+        <picture>
+          <source
+            media="(max-width: 768px)"
+            srcSet="/images/Hp_MOBspotlight.png"
+          />
+          <img
+            src="/images/Hp_spotlight.png"
+            alt="Spotlight"
+            className="landing-spotlight-img"
+            onError={(e) => {
+              e.target.style.display = "none";
+            }}
+          />
+        </picture>
+      </section>
+
       {/* Hero */}
       <section className="landing-hero">
         <div className="landing-hero-content">
